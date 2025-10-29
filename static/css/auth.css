@@ -1,0 +1,222 @@
+/* Authentication Styles */
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.container {
+    width: 100%;
+    max-width: 1200px;
+    padding: 20px;
+}
+
+.auth-container {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    padding: 40px;
+    max-width: 450px;
+    margin: 0 auto;
+}
+
+.logo {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.logo h1 {
+    color: #e67e22;
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.logo p {
+    color: #666;
+    font-size: 14px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 15px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+/* OTP Input Special Styling */
+.otp-input {
+    letter-spacing: 8px !important;
+    font-size: 20px !important;
+    font-weight: bold !important;
+    text-align: center !important;
+    padding: 15px 20px !important;
+    border: 2px solid #e0e0e0 !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    transition: all 0.3s ease !important;
+}
+
+.otp-input:focus {
+    outline: none !important;
+    border-color: #e67e22 !important;
+    box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.1) !important;
+    transform: translateY(-2px) !important;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.checkbox-group input {
+    width: auto;
+    margin-right: 8px;
+}
+
+.btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: #e67e22;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #d35400;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(230, 126, 34, 0.3);
+}
+
+.btn-secondary {
+    background: #3498db;
+    color: white;
+    margin-top: 10px;
+}
+
+.btn-secondary:hover {
+    background: #2980b9;
+}
+
+.toggle-auth {
+    text-align: center;
+    margin-top: 20px;
+    color: #666;
+}
+
+.toggle-auth a {
+    color: #f37121;
+        text-decoration: none;
+}
+
+.toggle-auth a:hover {
+    text-decoration: underline;
+}
+
+.subtitle {
+    color: #666;
+    text-align: center;
+    margin: 8px 0 16px 0;
+    font-size: 14px;
+}
+
+h3 {
+    color: #333;
+    text-align: center;
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.alert {
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.alert-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.alert-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.alert-warning {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Dark theme adjustments for auth */
+body.dark .auth-container {
+    background: #2f3640;
+    color: #f1f2f6;
+}
+
+body.dark input {
+    background: #3f3f3f;
+    color: #fff;
+    border-color: #4a4a4a;
+}
+
+body.dark .btn-primary {
+    background: #764ba2;
+}
+
+body.dark .btn-primary:hover {
+    background: #667eea;
+}
+
+body.dark .alert-success {
+    background: #2d4a3e;
+    color: #8cfac1;
+    border-color: #1b4a32;
+}
+
+body.dark .alert-error {
+    background: #4a2d2d;
+    color: #fac8c8;
+    border-color: #4a1b1b;
+}
+
+body.dark .alert-warning {
+    background: #4a432d;
+    color: #faf3c8;
+    border-color: #4a3b1b;
+}

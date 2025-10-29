@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Dashboard - AR Interior</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+    <!-- Dashboard -->
+    <div id="dashboardPage" class="hidden">
+        <div class="dashboard">
+            <aside class="sidebar">
+                <h2>AR Interior</h2>
+                <nav>
+                    <a class="active" onclick="showTab('dashboard')">📊 Dashboard</a>
+                    <a onclick="showTab('projects')">🏠 Projects</a>
+                    <a onclick="showTab('design')">🎨 AI Design</a>
+                    <a onclick="showTab('ar')">🪑 AR Preview</a>
+                    <a onclick="showTab('wishlist')">⭐ Wishlist</a>
+                    <a onclick="showTab('budget')">💰 Budget</a>
+                    <a onclick="showTab('feedback')">📝 Feedback</a>
+                    <a onclick="showTab('settings')">⚙️ Settings</a>
+                </nav>
+            </aside>
+            <main style="margin-left: 220px; width: calc(100% - 220px); min-height: 100vh;">
+                <div class="topbar">
+                    <h3>Interior Dashboard</h3>
+                    <div class="profile-menu">
+                        <div class="profile-trigger" onclick="toggleProfileMenu()">
+                            <div class="profile-avatar">👤</div>
+                            <span class="profile-name" id="profileName">User</span>
+                            <span class="profile-arrow">▼</span>
+                        </div>
+                        <div class="profile-dropdown" id="profileDropdown">
+                            <a href="#" onclick="showProfileEditor()">👤 My Account</a>
+                            <a href="#" onclick="toggleTheme()">🌗 Change Theme</a>
+                            <a href="#" onclick="logout()">🚪 Logout</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="content">
+                    <!-- Dashboard Tab -->
+                    <div id="dashboard" class="tab active">
+                        <div class="box">
+                            <h3>Welcome</h3>
+                            <p>Manage projects, preview AR furniture, plan budgets & save favorites!</p>
+                        </div>
+                    </div>
+
+                    <!-- Profile Tab -->
+                    <div id="profile" class="tab">
+                        <div class="box">
+                            <h3>Profile Editor</h3>
+                            <form id="profileForm" onsubmit="updateProfile(event)" class="profile-editor">
+                                <div class="profile-header">
+                                    <div class="profile-avatar-large" id="profileAvatarLarge">👤</div>
+                                    <div class="profile-upload">
+                                        <label class="btn btn-secondary" onclick="triggerFileUpload()">Upload Photo</label>
+                                        <input type="file" id="avatarUpload" accept="image/*" style="display: none" onchange="handleAvatarUpload(event)">
+                                        <p class="upload-hint">Recommended: Square image, max 2MB</p>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="profileUsername">Username</label>
+                                    <input type="text" id="profileUsername" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="profileEmail">Email</label>
+                                    <input type="email" id="profileEmail" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="profileBio">Bio</label>
+                                    <textarea id="profileBio" rows="3" placeholder="Tell us about yourself..."></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="profileCompany">Company/Studio</label>
+                                    <input type="text" id="profileCompany" placeholder="Your company or studio name">
+                                </div>
+                                <div class="form-group">
+                                    <label for="profileWebsite">Website</label>
+                                    <input type="url" id="profileWebsite" placeholder="https://your-website.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="profileLocation">Location</label>
+                                    <input type="text" id="profileLocation" placeholder="City, Country">
+                                </div>
+                                <div class="form-group">
+                                    <label>Preferences</label>
+                                    <div class="checkbox-group">
+                                        <input type="checkbox" id="profileEmailNotif">
+                                        <label for="profileEmailNotif">Receive email notifications</label>
+                                    </div>
+                                </div>
+                                <div class="password-section">
+                                    <h4>Change Password</h4>
+                                    <div class="form-group">
+                                        <label for="currentPassword">Current Password</label>
+                                        <input type="password" id="currentPassword">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="newPassword">New Password</label>
+                                        <input type="password" id="newPassword">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="confirmPassword">Confirm New Password</label>
+                                        <input type="password" id="confirmPassword">
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                                    <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Projects Tab -->
+                    <div id="projects" class="tab">
+                        <div class="box">
+                            <h3>Add Project</h3>
+                            <input type="text" id="projName" placeholder="Project Name" />
+                            <input type="text" id="projClient" placeholder="Client Name" />
+                            <input type="date" id="projDate" />
+                            <select id="projStatus">
+                                <option>In Progress</option>
+                                <option>Completed</option>
+                                <option>Pending</option>
+                            </select>
+                            <button onclick="addProject()">Add</button>
+                        </div>
+                        <div class="box">
+                            <h3>Projects</h3>
+                            <input type="text" id="projSearch" placeholder="Search..." onkeyup="searchProjects()" />
+                            <div id="projList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Design Tab -->
+                    <div id="design" class="tab">
+                        <div class="box">
+                            <h3>AI-Powered Interior Design</h3>
+                            <p>Upload a photo of your room and get AI-generated design suggestions!</p>
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="/design-suggestions" class="ai-design-button" style="display: inline-block; text-decoration: none;">
+                                    🚀 Start AI Design Journey
+                                </a>
+                            </div>
+                            <div class="grid">
+                                <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                                    <div style="font-size: 48px; margin-bottom: 10px;">📸</div>
+                                    <h4>Upload Room Photo</h4>
+                                    <p style="font-size: 12px; color: #666;">Take a photo of your space</p>
+                                </div>
+                                <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                                    <div style="font-size: 48px; margin-bottom: 10px;">🤖</div>
+                                    <h4>AI Analysis</h4>
+                                    <p style="font-size: 12px; color: #666;">Get intelligent room analysis</p>
+                                </div>
+                                <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                                    <div style="font-size: 48px; margin-bottom: 10px;">🎨</div>
+                                    <h4>Design Suggestions</h4>
+                                    <p style="font-size: 12px; color: #666;">Receive personalized designs</p>
+                                </div>
+                                <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                                    <div style="font-size: 48px; margin-bottom: 10px;">🪑</div>
+                                    <h4>AR Preview</h4>
+                                    <p style="font-size: 12px; color: #666;">View in augmented reality</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AR Tab -->
+                    <div id="ar" class="tab">
+                        <div class="box">
+                            <h3>🕶️ AR & 3D Preview</h3>
+                            <p>Experience your designs in augmented reality or preview in 3D</p>
+
+                            <!-- 3D Model Viewer Section -->
+                            <div class="ar-preview-container">
+                                <div class="ar-preview-header">
+                                    <h4>🏠 Interactive 3D Model Viewer</h4>
+                                    <p style="font-size: 12px; color: #666; margin: 0;">Explore furniture in 3D with mouse interaction - rotate, zoom, and inspect models</p>
+                                </div>
+
+                                <!-- 3D Viewer Interface -->
+                                <div class="model-viewer-section">
+                                    <div class="model-viewer-container">
+                                        <div class="model-viewer-sidebar">
+                                            <h5>Available 3D Models</h5>
+                                            <div class="model-list" id="modelList">
+                                                <p style="color: #666; font-size: 12px; text-align: center; padding: 20px;">Loading models...</p>
+                                            </div>
+
+                                            <div class="model-controls">
+                                                <div class="control-group">
+                                                    <label>Scale: <span id="scaleValue">1.0</span></label>
+                                                    <input type="range" id="scaleSlider" min="0.1" max="3.0" step="0.1" value="1.0">
+                                                </div>
+                                                <div class="control-group">
+                                                    <label>Rotation Y: <span id="rotationYValue">0°</span></label>
+                                                    <input type="range" id="rotationYSlider" min="0" max="360" step="5" value="0">
+                                                </div>
+                                                <div class="control-group">
+                                                    <label>Rotation X: <span id="rotationXValue">0°</span></label>
+                                                    <input type="range" id="rotationXSlider" min="0" max="360" step="5" value="0">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="model-viewer-main">
+                                            <div class="viewer-info" id="viewerInfo" style="display: none;">
+                                                <h6 id="modelName">No Model Loaded</h6>
+                                                <p id="modelCategory">Select a model to begin</p>
+                                                <p id="modelDimensions">Dimensions: N/A</p>
+                                            </div>
+
+                                            <div class="viewer-status" id="status">
+                                                Ready to load models
+                                            </div>
+
+                                            <div class="loading-indicator" id="loading" style="display: none;">
+                                                <div class="spinner"></div>
+                                                <p>Loading 3D Model...</p>
+                                            </div>
+
+                                            <div class="no-model-indicator" id="noModel">
+                                                <div class="no-model-icon">🏠</div>
+                                                <h5>No Model Loaded</h5>
+                                                <p>Select a model to begin</p>
+                                            </div>
+
+                                            <div class="viewer-actions">
+                                                <button class="action-btn" id="resetBtn" onclick="resetView()" title="Reset View">🔄</button>
+                                                <button class="action-btn" id="autoRotateBtn" onclick="toggleAutoRotate()" title="Auto Rotate">🔄</button>
+                                                <button class="action-btn" id="wireframeBtn" onclick="toggleWireframe()" title="Wireframe">⚡</button>
+                                            </div>
+
+                                            <div class="preset-views">
+                                                <button class="preset-btn active" onclick="setPresetView('front')">Front</button>
+                                                <button class="preset-btn" onclick="setPresetView('top')">Top</button>
+                                                <button class="preset-btn" onclick="setPresetView('side')">Side</button>
+                                                <button class="preset-btn" onclick="setPresetView('iso')">ISO</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quick Actions -->
+                            <div class="ar-quick-actions">
+                                <a href="/ar-view" class="btn btn-primary" style="margin-right: 10px;">
+                                    🚀 Full AR Experience
+                                </a>
+                                <a href="/3d-viewer" class="btn btn-secondary" style="margin-right: 10px;">
+                                    🔍 Open Full 3D Viewer
+                                </a>
+                                <button class="btn btn-secondary" onclick="loadARModelsFromPreview()">
+                                    📦 Refresh Models
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Wishlist Tab -->
+                    <div id="wishlist" class="tab">
+                        <div class="box">
+                            <h3>Favorites</h3>
+                            <div id="wishlistItems">
+                                <p>No favorites yet.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Budget Tab -->
+                    <div id="budget" class="tab">
+                        <div class="box">
+                            <h3>Add Budget</h3>
+                            <input type="text" id="budgetProj" placeholder="Project" />
+                            <input type="number" id="budgetAmt" placeholder="Amount" />
+                            <button onclick="addBudget()">Add</button>
+                        </div>
+                        <div class="box">
+                            <h3>Budgets</h3>
+                            <div id="budgetList"></div>
+                            <p><b>Total:</b> $<span id="totalBudget">0</span></p>
+                            <p><b>Average:</b> $<span id="avgBudget">0</span></p>
+                            <p><b>Highest:</b> $<span id="maxBudget">0</span></p>
+                        </div>
+                    </div>
+
+                    <!-- Feedback Tab -->
+                    <div id="feedback" class="tab">
+                        <div class="box">
+                            <h3>Feedback</h3>
+                            <textarea id="feedbackText" placeholder="Enter your feedback here..." rows="5" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;"></textarea>
+                            <button onclick="submitFeedback()">Submit Feedback</button>
+                        </div>
+                    </div>
+
+                    <!-- Settings Tab -->
+                    <div id="settings" class="tab">
+                        <div class="box">
+                            <h3>Settings</h3>
+                            <button onclick="toggleTheme()" style="margin-right:0.8rem;">🌗 Toggle Theme</button>
+                            <button onclick="logout()">🚪 Logout</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ar_preview.js') }}"></script>
+</body>
+</html>

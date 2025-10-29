@@ -1,0 +1,5 @@
+{
+    "chat.agent.maxRequests": 100000,
+    "python.pythonPath": "./venv/Scripts/python.exe",
+    "python.defaultInterpreterPath": "./venv/Scripts/python.exe"
+}

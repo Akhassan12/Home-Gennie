@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Authentication - AR Interior Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div id="authContainer" class="auth-container">
+            <div class="logo">
+                <h1>🏠 AR Interior</h1>
+                <p>Your Interior Design Dashboard</p>
+            </div>
+
+            <div id="alertContainer"></div>
+
+
+            <!-- Login Form -->
+            <div id="loginForm">
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="loginUsername" required placeholder="Enter your username">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" required placeholder="Enter your password">
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="rememberMe">
+                        <label for="rememberMe">Remember me</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Continue</button>
+                </form>
+                <div class="toggle-auth">
+                    <div>Don't have an account? <a href="#" onclick="toggleAuthForm()">Register</a></div>
+                    <div><a href="#" onclick="showResetPasswordForm()">Forgot Password?</a></div>
+                </div>
+            </div>
+
+            <!-- Reset Password Form -->
+            <div id="resetPasswordForm" class="hidden">
+                <h3>Reset Password</h3>
+                <p class="subtitle">Enter your email to reset your password</p>
+                <form onsubmit="requestPasswordReset(event)">
+                    <div class="form-group">
+                        <input type="email" 
+                               id="resetEmail" 
+                               placeholder="Enter your email" 
+                               required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Reset Password</button>
+                </form>
+                <div class="toggle-auth">
+                    <div><a href="#" onclick="backToLogin()">Back to Login</a></div>
+                </div>
+            </div>
+
+            <!-- Reset Password OTP Form -->
+            <div id="resetPasswordOtpForm" class="hidden">
+                <div class="form-group" style="text-align: center;">
+                    <h3 style="margin-bottom: 15px;">Verify Reset Code</h3>
+                    <p style="color: #666; margin-bottom: 20px;">Please enter the OTP sent to your email</p>
+                    <input type="text"
+                           id="resetOtpInput"
+                           placeholder="Enter OTP"
+                           maxlength="6"
+                           pattern="[0-9]{6}"
+                           required
+                           class="otp-input">
+                    <input type="password"
+                           id="newPasswordInput"
+                           placeholder="Enter new password"
+                           minlength="6"
+                           required
+                           style="margin-top: 10px;">
+                    <p style="color: #666; margin-top: 10px; font-size: 12px;">
+                        OTP will expire in 10 minutes
+                    </p>
+                    <button onclick="verifyPasswordReset()" class="btn btn-primary" style="margin-top: 20px;">
+                        Set New Password
+                    </button>
+                    <button onclick="resendResetOTP()" class="btn btn-secondary">
+                        Resend OTP
+                    </button>
+                    <div class="toggle-auth" style="margin-top: 15px;">
+                        <a href="#" onclick="backToLogin()">Back to Login</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Login OTP Form -->
+            <div id="loginOtpForm" class="hidden">
+                <div class="form-group" style="text-align: center;">
+                    <h3 style="margin-bottom: 15px;">🔐 Login Verification</h3>
+                    <p style="color: #666; margin-bottom: 20px;">Please enter the OTP sent to your email</p>
+                    <input type="text"
+                           id="loginOtpInput"
+                           placeholder="Enter OTP"
+                           maxlength="6"
+                           pattern="[0-9]{6}"
+                           required
+                           class="otp-input">
+                    <p style="color: #666; margin-top: 10px; font-size: 12px;">
+                        OTP will expire in 10 minutes
+                    </p>
+                    <button onclick="verifyLoginOTP()" class="btn btn-primary" style="margin-top: 20px;">
+                        Verify & Login
+                    </button>
+                    <button onclick="resendLoginOTP()" class="btn btn-secondary">
+                        Resend OTP
+                    </button>
+                    <div class="toggle-auth" style="margin-top: 15px;">
+                        <a href="#" onclick="backToLogin()">Back to Login</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="hidden">
+                <form onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="regUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="regEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password (min. 6 characters)</label>
+                        <input type="password" id="regPassword" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Register</button>
+                </form>
+                <div class="toggle-auth">
+                    Already have an account? <a href="#" onclick="toggleAuthForm()">Login</a>
+                </div>
+            </div>
+
+            <!-- OTP Verification Form -->
+            <div id="otpForm" class="hidden">
+                <div class="form-group" style="text-align: center;">
+                    <h3 style="margin-bottom: 15px;">Email Verification</h3>
+                    <p style="color: #666; margin-bottom: 20px;">Please enter the 6-digit OTP code sent to your email</p>
+                    <input type="text"
+                           id="otpInput"
+                           placeholder="Enter OTP"
+                           maxlength="6"
+                           pattern="[0-9]{6}"
+                           required
+                           class="otp-input">
+                    <p style="color: #666; margin-top: 10px; font-size: 12px;">
+                        OTP will expire in 10 minutes
+                    </p>
+                    <button onclick="verifyOTP()" class="btn btn-primary" style="margin-top: 20px;">
+                        Verify OTP
+                    </button>
+                    <button onclick="resendOTP()" class="btn btn-secondary">
+                        Resend OTP
+                    </button>
+                    <div class="toggle-auth" style="margin-top: 15px;">
+                        <a href="#" onclick="toggleAuthForm()">Back to Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+</body>
+</html>

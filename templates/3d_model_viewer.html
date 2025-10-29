@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Model Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+            color: white;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #e67e22;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #d35400;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            margin-top: 80px;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar h3 {
+            color: #e67e22;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .model-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .model-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .model-item.selected {
+            background: rgba(230, 126, 34, 0.3);
+            border-color: #e67e22;
+        }
+
+        .model-item-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .model-item-name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .model-item-category {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+
+        .control-group input {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            color: white;
+            font-size: 12px;
+        }
+
+        .control-group input:focus {
+            outline: none;
+            border-color: #e67e22;
+        }
+
+        .viewer {
+            flex: 1;
+            position: relative;
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        }
+
+        .viewer-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 12px;
+            max-width: 300px;
+            z-index: 100;
+        }
+
+        .viewer-info h4 {
+            color: #e67e22;
+            margin-bottom: 8px;
+        }
+
+        .viewer-info p {
+            font-size: 14px;
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }
+
+        .status {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            z-index: 50;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #e67e22;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-model {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            z-index: 50;
+        }
+
+        .no-model-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .no-model h3 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .no-model p {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+
+        .quick-actions {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .quick-action-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .quick-action-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .quick-action-btn.active {
+            background: #e67e22;
+            border-color: #e67e22;
+        }
+
+        .preset-views {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .preset-btn {
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .preset-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .preset-btn.active {
+            background: #e67e22;
+            border-color: #e67e22;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏠 Interactive 3D Model Viewer</h1>
+        <div class="header-buttons">
+            <a href="/ar-view" class="btn btn-secondary">🕶️ AR View</a>
+            <a href="/" class="btn btn-primary">🏠 Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <h3>Available 3D Models</h3>
+            <div id="modelList">
+                <p style="color: rgba(255,255,255,0.7); font-size: 14px;">Loading models...</p>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>Scale: <span id="scaleValue">1.0</span></label>
+                    <input type="range" id="scaleSlider" min="0.1" max="3.0" step="0.1" value="1.0">
+                </div>
+                <div class="control-group">
+                    <label>Rotation Y: <span id="rotationYValue">0°</span></label>
+                    <input type="range" id="rotationYSlider" min="0" max="360" step="5" value="0">
+                </div>
+                <div class="control-group">
+                    <label>Rotation X: <span id="rotationXValue">0°</span></label>
+                    <input type="range" id="rotationXSlider" min="0" max="360" step="5" value="0">
+                </div>
+            </div>
+        </div>
+
+        <div class="viewer">
+            <div class="viewer-info" id="viewerInfo" style="display: none;">
+                <h4 id="modelName">No Model Loaded</h4>
+                <p id="modelCategory">Select a model to begin</p>
+                <p id="modelDimensions">Dimensions: N/A</p>
+            </div>
+
+            <div class="status" id="status">
+                Ready to load models
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <h3>Loading 3D Model...</h3>
+            </div>
+
+            <div class="no-model" id="noModel">
+                <div class="no-model-icon">🏠</div>
+                <h3>No Model Loaded</h3>
+                <p>Select a model to begin</p>
+            </div>
+
+            <div class="quick-actions">
+                <button class="quick-action-btn" id="resetBtn" onclick="resetView()" title="Reset View">🔄</button>
+                <button class="quick-action-btn" id="autoRotateBtn" onclick="toggleAutoRotate()" title="Auto Rotate">🔄</button>
+                <button class="quick-action-btn" id="wireframeBtn" onclick="toggleWireframe()" title="Wireframe">⚡</button>
+            </div>
+
+            <div class="preset-views">
+                <button class="preset-btn active" onclick="setPresetView('front')">Front</button>
+                <button class="preset-btn" onclick="setPresetView('top')">Top</button>
+                <button class="preset-btn" onclick="setPresetView('side')">Side</button>
+                <button class="preset-btn" onclick="setPresetView('iso')">ISO</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Three.js setup
+        let scene, camera, renderer, controls;
+        let currentModel = null;
+        let models = [];
+        let autoRotate = false;
+        let wireframeMode = false;
+
+        // Initialize Three.js scene
+        function initThreeJS() {
+            const viewer = document.querySelector('.viewer');
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x34495e);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, viewer.offsetWidth / viewer.offsetHeight, 0.1, 1000);
+            camera.position.set(5, 5, 5);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(viewer.offsetWidth, viewer.offsetHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.setClearColor(0x34495e);
+
+            // Add canvas to viewer
+            viewer.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = true;
+            controls.enablePan = true;
+
+            // Lighting
+            setupLighting();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+
+            // Start render loop
+            animate();
+        }
+
+        function setupLighting() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            // Directional light (key light)
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            // Fill light
+            const fillLight = new THREE.DirectionalLight(0x87CEEB, 0.3);
+            fillLight.position.set(-5, 5, -5);
+            scene.add(fillLight);
+
+            // Rim light
+            const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            rimLight.position.set(0, 0, -10);
+            scene.add(rimLight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (controls) {
+                controls.update();
+            }
+
+            if (autoRotate && currentModel) {
+                currentModel.rotation.y += 0.01;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const viewer = document.querySelector('.viewer');
+            camera.aspect = viewer.offsetWidth / viewer.offsetHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(viewer.offsetWidth, viewer.offsetHeight);
+        }
+
+        // Load available models
+        async function loadModels() {
+            try {
+                updateStatus('Loading models...');
+
+                const response = await fetch('/api/ar/models/public');
+                const data = await response.json();
+
+                if (data.success) {
+                    models = data.models;
+                    displayModelList();
+                    updateStatus(`Loaded ${models.length} models`);
+                } else {
+                    throw new Error(data.error || 'Failed to load models');
+                }
+            } catch (error) {
+                console.error('Error loading models:', error);
+                updateStatus('Error loading models: ' + error.message);
+            }
+        }
+
+        function displayModelList() {
+            const modelList = document.getElementById('modelList');
+            modelList.innerHTML = '';
+
+            if (models.length === 0) {
+                modelList.innerHTML = '<p style="color: rgba(255,255,255,0.7); font-size: 14px;">No models available</p>';
+                return;
+            }
+
+            models.forEach((model, index) => {
+                const modelItem = document.createElement('div');
+                modelItem.className = 'model-item';
+                if (index === 0) modelItem.classList.add('selected');
+
+                modelItem.innerHTML = `
+                    <div class="model-item-icon">${getModelIcon(model.category)}</div>
+                    <div class="model-item-name">${model.filename.replace('.glb', '').replace(/_/g, ' ')}</div>
+                    <div class="model-item-category">${model.category}</div>
+                `;
+
+                modelItem.onclick = () => selectModel(model, modelItem);
+                modelList.appendChild(modelItem);
+            });
+        }
+
+        function getModelIcon(category) {
+            const icons = {
+                'seating': '🛋️',
+                'tables': '🪑',
+                'lighting': '💡',
+                'beds': '🛏️',
+                'storage': '🗄️',
+                'decor': '🖼️',
+                'furniture': '🏠'
+            };
+            return icons[category] || '🏠';
+        }
+
+        function selectModel(model, element) {
+            // Remove previous selection
+            document.querySelectorAll('.model-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+
+            // Add selection to clicked item
+            element.classList.add('selected');
+
+            // Load the model
+            loadModel(model);
+        }
+
+        async function loadModel(model) {
+            try {
+                updateStatus('Loading 3D model...');
+                showLoading(true);
+
+                // Clear current model
+                if (currentModel) {
+                    scene.remove(currentModel);
+                    currentModel = null;
+                }
+
+                // Load GLTF model
+                const loader = new THREE.GLTFLoader();
+                const gltf = await new Promise((resolve, reject) => {
+                    loader.load(
+                        model.url,
+                        resolve,
+                        undefined,
+                        reject
+                    );
+                });
+
+                // Add model to scene
+                currentModel = gltf.scene;
+                scene.add(currentModel);
+
+                // Set up shadows
+                currentModel.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+
+                // Center and scale model
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+
+                // Center the model
+                currentModel.position.sub(center);
+
+                // Scale to reasonable size
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const targetSize = 2;
+                const scale = targetSize / maxDim;
+                currentModel.scale.set(scale, scale, scale);
+
+                // Update UI
+                updateModelInfo(model);
+                showLoading(false);
+                updateStatus('Model loaded successfully');
+
+                // Reset camera to fit model
+                resetCamera();
+
+            } catch (error) {
+                console.error('Error loading model:', error);
+                updateStatus('Error loading model: ' + error.message);
+                showLoading(false);
+            }
+        }
+
+        function updateModelInfo(model) {
+            const info = document.getElementById('viewerInfo');
+            const name = document.getElementById('modelName');
+            const category = document.getElementById('modelCategory');
+            const dimensions = document.getElementById('modelDimensions');
+
+            name.textContent = model.filename.replace('.glb', '').replace(/_/g, ' ');
+            category.textContent = `Category: ${model.category}`;
+            dimensions.textContent = 'Dimensions: Loading...';
+
+            info.style.display = 'block';
+
+            // Calculate dimensions if model is loaded
+            if (currentModel) {
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const size = box.getSize(new THREE.Vector3());
+                dimensions.textContent = `Dimensions: ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}`;
+            }
+        }
+
+        function resetCamera() {
+            if (currentModel) {
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+
+                // Position camera to view the model
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const fov = camera.fov * (Math.PI / 180);
+                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+
+                camera.position.set(center.x + maxDim, center.y + maxDim, center.z + cameraZ * 2);
+                camera.lookAt(center);
+
+                controls.target.set(center.x, center.y, center.z);
+                controls.update();
+            }
+        }
+
+        function resetView() {
+            resetCamera();
+            updateStatus('View reset');
+        }
+
+        function toggleAutoRotate() {
+            autoRotate = !autoRotate;
+            const btn = document.getElementById('autoRotateBtn');
+            btn.classList.toggle('active', autoRotate);
+            updateStatus(autoRotate ? 'Auto rotate ON' : 'Auto rotate OFF');
+        }
+
+        function toggleWireframe() {
+            wireframeMode = !wireframeMode;
+            const btn = document.getElementById('wireframeBtn');
+            btn.classList.toggle('active', wireframeMode);
+
+            if (currentModel) {
+                currentModel.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => {
+                                mat.wireframe = wireframeMode;
+                            });
+                        } else {
+                            child.material.wireframe = wireframeMode;
+                        }
+                    }
+                });
+            }
+
+            updateStatus(wireframeMode ? 'Wireframe ON' : 'Wireframe OFF');
+        }
+
+        function setPresetView(view) {
+            // Remove active class from all preset buttons
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+
+            if (!currentModel) return;
+
+            const box = new THREE.Box3().setFromObject(currentModel);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+
+                switch(view) {
+                    case 'front':
+                        camera.position.set(center.x, center.y, center.z + maxDim * 2);
+                        break;
+                    case 'top':
+                        camera.position.set(center.x, center.y + maxDim * 2, center.z);
+                        break;
+                    case 'side':
+                        camera.position.set(center.x + maxDim * 2, center.y, center.z);
+                        break;
+                    case 'iso':
+                        camera.position.set(center.x + maxDim, center.y + maxDim, center.z + maxDim);
+                        break;
+                }
+
+                camera.lookAt(center);
+                controls.target.set(center.x, center.y, center.z);
+                controls.update();
+        }
+
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            const noModel = document.getElementById('noModel');
+
+            if (show) {
+                loading.style.display = 'block';
+                noModel.style.display = 'none';
+            } else {
+                loading.style.display = 'none';
+                if (!currentModel) {
+                    noModel.style.display = 'block';
+                }
+            }
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        // Control sliders
+        document.getElementById('scaleSlider').addEventListener('input', (e) => {
+            const scale = parseFloat(e.target.value);
+            document.getElementById('scaleValue').textContent = scale;
+
+            if (currentModel) {
+                currentModel.scale.set(scale, scale, scale);
+            }
+        });
+
+        document.getElementById('rotationYSlider').addEventListener('input', (e) => {
+            const rotation = parseFloat(e.target.value);
+            document.getElementById('rotationYValue').textContent = rotation + '°';
+
+            if (currentModel) {
+                currentModel.rotation.y = rotation * Math.PI / 180;
+            }
+        });
+
+        document.getElementById('rotationXSlider').addEventListener('input', (e) => {
+            const rotation = parseFloat(e.target.value);
+            document.getElementById('rotationXValue').textContent = rotation + '°';
+
+            if (currentModel) {
+                currentModel.rotation.x = rotation * Math.PI / 180;
+            }
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initThreeJS();
+            loadModels();
+        });
+    </script>
+</body>
+</html>

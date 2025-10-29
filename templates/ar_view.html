@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Furniture Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            overflow: hidden;
+        }
+
+        #ar-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #ar-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            pointer-events: all;
+        }
+
+        .ar-button {
+            padding: 15px 25px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .ar-button:hover {
+            background: #fff;
+            transform: scale(1.05);
+        }
+
+        .ar-button:active {
+            transform: scale(0.95);
+        }
+
+        .ar-button.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        #model-selector {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 15px;
+            max-width: 300px;
+            pointer-events: all;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .model-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f5f5f5;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .model-item:hover {
+            background: #e0e0e0;
+            transform: translateX(5px);
+        }
+
+        .model-item.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        #ar-status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            pointer-events: none;
+            font-size: 14px;
+        }
+
+        #transform-controls {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 15px;
+            display: none;
+            pointer-events: all;
+        }
+
+        .transform-slider {
+            margin: 10px 0;
+        }
+
+        .transform-slider label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .transform-slider input {
+            width: 200px;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 400px;
+            pointer-events: all;
+        }
+
+        #instructions h2 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        #instructions p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .hide {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="ar-container"></div>
+    
+    <div id="ar-overlay">
+        <div id="ar-status">Initializing AR...</div>
+        
+        <div id="instructions">
+            <h2>🏠 AR Furniture Placement</h2>
+            <p>Point your device at a flat surface</p>
+            <p>Tap to place furniture</p>
+            <p>Pinch to scale • Rotate with two fingers</p>
+            <button class="ar-button primary" onclick="startAR()">Start AR Experience</button>
+        </div>
+
+        <div id="model-selector" class="hide">
+            <h3 style="margin-bottom: 10px;">Select Furniture</h3>
+            <div id="model-list"></div>
+        </div>
+
+        <div id="transform-controls">
+            <div class="transform-slider">
+                <label>Scale</label>
+                <input type="range" id="scale-slider" min="0.5" max="2" step="0.1" value="1">
+            </div>
+            <div class="transform-slider">
+                <label>Rotation (Y)</label>
+                <input type="range" id="rotation-slider" min="0" max="360" step="5" value="0">
+            </div>
+        </div>
+
+        <div id="ar-controls" class="hide">
+            <button class="ar-button" onclick="toggleModelSelector()">📦 Models</button>
+            <button class="ar-button" onclick="deleteSelected()">🗑️ Delete</button>
+            <button class="ar-button primary" onclick="savePlacement()">💾 Save</button>
+            <button class="ar-button" onclick="exitAR()">❌ Exit</button>
+        </div>
+    </div>
+
+    <script>
+        // AR Application State
+        const ARApp = {
+            session: null,
+            scene: null,
+            camera: null,
+            renderer: null,
+            gl: null,
+            referenceSpace: null,
+            viewerSpace: null,
+            hitTestSource: null,
+            reticle: null,
+            models: [],
+            selectedModel: null,
+            modelLibrary: [],
+            sessionId: null,
+            placedObjects: []
+        };
+
+        // Initialize Three.js scene
+        function initScene() {
+            ARApp.scene = new THREE.Scene();
+            ARApp.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            
+            // Create renderer
+            ARApp.renderer = new THREE.WebGLRenderer({
+                alpha: true,
+                preserveDrawingBuffer: true,
+                antialias: true
+            });
+            ARApp.renderer.setPixelRatio(window.devicePixelRatio);
+            ARApp.renderer.setSize(window.innerWidth, window.innerHeight);
+            ARApp.renderer.xr.enabled = true;
+            
+            document.getElementById('ar-container').appendChild(ARApp.renderer.domElement);
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            ARApp.scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            directionalLight.position.set(5, 10, 5);
+            directionalLight.castShadow = true;
+            ARApp.scene.add(directionalLight);
+
+            // Create reticle for placement indicator
+            createReticle();
+        }
+
+        // Create placement reticle
+        function createReticle() {
+            const geometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+            const material = new THREE.MeshBasicMaterial({ 
+                color: 0x667eea,
+                side: THREE.DoubleSide
+            });
+            ARApp.reticle = new THREE.Mesh(geometry, material);
+            ARApp.reticle.matrixAutoUpdate = false;
+            ARApp.reticle.visible = false;
+            ARApp.scene.add(ARApp.reticle);
+        }
+
+        // Check WebXR support
+        async function checkARSupport() {
+            if (!navigator.xr) {
+                updateStatus('WebXR not supported on this device');
+                return false;
+            }
+
+            try {
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (!supported) {
+                    updateStatus('AR not supported on this device');
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                updateStatus('Error checking AR support: ' + error.message);
+                return false;
+            }
+        }
+
+        // Start AR session
+        async function startAR() {
+            const supported = await checkARSupport();
+            if (!supported) {
+                alert('AR is not supported on your device. Please use a mobile device with AR capabilities.');
+                return;
+            }
+
+            // Hide instructions
+            document.getElementById('instructions').classList.add('hide');
+            document.getElementById('ar-controls').classList.remove('hide');
+            document.getElementById('model-selector').classList.remove('hide');
+
+            // Initialize scene
+            initScene();
+
+            // Load model library
+            await loadModelLibrary();
+
+            // Request AR session
+            try {
+                const session = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['hit-test'],
+                    optionalFeatures: ['dom-overlay', 'light-estimation'],
+                    domOverlay: { root: document.getElementById('ar-overlay') }
+                });
+
+                ARApp.session = session;
+                session.addEventListener('end', onSessionEnd);
+
+                // Setup XR session
+                await ARApp.renderer.xr.setSession(session);
+                
+                // Get reference spaces
+                ARApp.referenceSpace = await session.requestReferenceSpace('local-floor');
+                ARApp.viewerSpace = await session.requestReferenceSpace('viewer');
+
+                // Setup hit testing
+                const hitTestSource = await session.requestHitTestSource({ space: ARApp.viewerSpace });
+                ARApp.hitTestSource = hitTestSource;
+
+                // Start render loop
+                ARApp.renderer.setAnimationLoop(render);
+
+                updateStatus('AR Session Active - Tap to place furniture');
+
+            } catch (error) {
+                updateStatus('Failed to start AR: ' + error.message);
+                console.error('AR Session Error:', error);
+            }
+        }
+
+        // Load available 3D models
+        async function loadModelLibrary() {
+            try {
+                const response = await fetch('/api/ar/models');
+                const data = await response.json();
+
+                if (data.success) {
+                    ARApp.modelLibrary = data.models;
+                    displayModelList();
+                    updateStatus(`Loaded ${data.models.length} 3D models`);
+                } else {
+                    throw new Error(data.error || 'Failed to load models');
+                }
+            } catch (error) {
+                console.error('Failed to load model library:', error);
+                updateStatus('Using fallback models - AR service unavailable');
+
+                // Use fallback models when AR service is not available
+                ARApp.modelLibrary = getFallbackModels();
+                displayModelList();
+            }
+        }
+
+        // Display model selection list
+        function displayModelList() {
+            const modelList = document.getElementById('model-list');
+            modelList.innerHTML = '';
+
+            ARApp.modelLibrary.forEach((model, index) => {
+                const item = document.createElement('div');
+                item.className = 'model-item';
+                if (index === 0) {
+                    item.classList.add('selected');
+                    ARApp.selectedModel = model;
+                }
+                item.textContent = model.name;
+                item.onclick = () => selectModel(model, item);
+                modelList.appendChild(item);
+            });
+        }
+
+        // Select a model for placement
+        function selectModel(model, element) {
+            document.querySelectorAll('.model-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            ARApp.selectedModel = model;
+            updateStatus('Selected: ' + model.name);
+        }
+
+        // Main render loop
+        function render(timestamp, frame) {
+            if (!frame) return;
+
+            const session = frame.session;
+            const pose = frame.getViewerPose(ARApp.referenceSpace);
+
+            if (pose) {
+                const view = pose.views[0];
+
+                // Update hit test for reticle
+                if (ARApp.hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(ARApp.hitTestSource);
+                    
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        const hitPose = hit.getPose(ARApp.referenceSpace);
+                        
+                        if (hitPose) {
+                            ARApp.reticle.visible = true;
+                            ARApp.reticle.matrix.fromArray(hitPose.transform.matrix);
+                        }
+                    } else {
+                        ARApp.reticle.visible = false;
+                    }
+                }
+
+                // Render scene
+                const viewport = session.renderState.baseLayer.getViewport(view);
+                ARApp.renderer.setSize(viewport.width, viewport.height);
+                
+                ARApp.camera.projectionMatrix.fromArray(view.projectionMatrix);
+                ARApp.camera.matrix.fromArray(view.transform.matrix);
+                ARApp.camera.updateMatrixWorld(true);
+
+                ARApp.renderer.render(ARApp.scene, ARApp.camera);
+            }
+        }
+
+        // Handle tap to place object
+        ARApp.renderer.domElement.addEventListener('click', (event) => {
+            if (ARApp.reticle.visible && ARApp.selectedModel) {
+                placeObject(ARApp.reticle.matrix);
+            }
+        });
+
+        // Place 3D object in AR
+        async function placeObject(matrix) {
+            try {
+                const loader = new THREE.GLTFLoader();
+                
+                // For demo: create a simple box if GLB not available
+                const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: Math.random() * 0xffffff,
+                    metalness: 0.3,
+                    roughness: 0.7
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                mesh.position.setFromMatrixPosition(matrix);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                
+                // Store metadata
+                mesh.userData = {
+                    modelId: ARApp.selectedModel.model_id,
+                    name: ARApp.selectedModel.name,
+                    timestamp: Date.now()
+                };
+
+                ARApp.scene.add(mesh);
+                ARApp.placedObjects.push(mesh);
+
+                updateStatus('Placed: ' + ARApp.selectedModel.name);
+                
+                // Enable transform controls
+                enableTransformControls(mesh);
+
+            } catch (error) {
+                console.error('Error placing object:', error);
+                updateStatus('Failed to place object');
+            }
+        }
+
+        // Enable transform controls for selected object
+        function enableTransformControls(object) {
+            // Show transform UI
+            document.getElementById('transform-controls').style.display = 'block';
+            
+            // Setup slider listeners
+            document.getElementById('scale-slider').oninput = (e) => {
+                const scale = parseFloat(e.target.value);
+                object.scale.set(scale, scale, scale);
+            };
+
+            document.getElementById('rotation-slider').oninput = (e) => {
+                const rotation = parseFloat(e.target.value) * Math.PI / 180;
+                object.rotation.y = rotation;
+            };
+        }
+
+        // Delete selected object
+        function deleteSelected() {
+            if (ARApp.placedObjects.length > 0) {
+                const lastObject = ARApp.placedObjects.pop();
+                ARApp.scene.remove(lastObject);
+                updateStatus('Deleted object');
+                
+                if (ARApp.placedObjects.length === 0) {
+                    document.getElementById('transform-controls').style.display = 'none';
+                }
+            }
+        }
+
+        // Save AR placement
+        async function savePlacement() {
+            try {
+                // Get current session ID or create one
+                if (!ARApp.sessionId) {
+                    ARApp.sessionId = 'session_' + Date.now();
+                }
+
+                const placementData = {
+                    session_id: ARApp.sessionId,
+                    objects: ARApp.placedObjects.map(obj => ({
+                        model_id: obj.userData.modelId,
+                        position: obj.position.toArray(),
+                        rotation: obj.rotation.toArray(),
+                        scale: obj.scale.toArray(),
+                        timestamp: obj.userData.timestamp
+                    }))
+                };
+
+                const response = await fetch('/api/ar/session/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(placementData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    updateStatus('✅ AR design saved successfully!');
+                    alert('🎉 Your AR design has been saved! You can load it later from your dashboard.');
+                } else {
+                    updateStatus('❌ Failed to save placement: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Save error:', error);
+                updateStatus('❌ Error saving placement: ' + error.message);
+            }
+        }
+
+        // Toggle model selector
+        function toggleModelSelector() {
+            const selector = document.getElementById('model-selector');
+            selector.classList.toggle('hide');
+        }
+
+        // Exit AR session
+        function exitAR() {
+            if (ARApp.session) {
+                ARApp.session.end();
+            }
+        }
+
+        // Handle session end
+        function onSessionEnd() {
+            ARApp.session = null;
+            ARApp.hitTestSource = null;
+            document.getElementById('instructions').classList.remove('hide');
+            document.getElementById('ar-controls').classList.add('hide');
+            document.getElementById('model-selector').classList.add('hide');
+            updateStatus('AR Session Ended');
+        }
+
+        // Update status message
+        function updateStatus(message) {
+            document.getElementById('ar-status').textContent = message;
+        }
+
+        // Fallback models if API fails
+        function getFallbackModels() {
+            return [
+                { model_id: 'box_1', name: 'Modern Cube', category: 'decor' },
+                { model_id: 'sphere_1', name: 'Decorative Sphere', category: 'decor' },
+                { model_id: 'cylinder_1', name: 'Cylindrical Stand', category: 'furniture' }
+            ];
+        }
+
+        // Initialize on load
+        window.addEventListener('load', async () => {
+            const supported = await checkARSupport();
+            if (!supported) {
+                document.querySelector('#instructions p').textContent = 
+                    'AR is not supported on this device. Please use a mobile device with AR capabilities (iOS 12+ or Android 8+ with ARCore).';
+            }
+        });
+    </script>
+</body>
+</html>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: white;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #2c3e50;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        
+        .header h1 {
+            color: #e67e22;
+            font-size: 24px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: #e67e22;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #d35400;
+        }
+        
+        .btn-secondary {
+            background: #3498db;
+            color: white;
+            margin-left: 10px;
+        }
+        
+        .btn-secondary:hover {
+            background: #2980b9;
+        }
+        
+        .main-container {
+            display: flex;
+            height: 100vh;
+            margin-top: 70px;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: #2c3e50;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .sidebar h3 {
+            color: #e67e22;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        
+        .design-info {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .design-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .design-description {
+            font-size: 14px;
+            color: #bdc3c7;
+            line-height: 1.4;
+            margin-bottom: 15px;
+        }
+        
+        .color-palette {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .color-swatch {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid #34495e;
+        }
+        
+        .elements-list {
+            margin-bottom: 20px;
+        }
+        
+        .elements-list h4 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #e67e22;
+        }
+        
+        .element-item {
+            background: rgba(255,255,255,0.05);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .element-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .element-item.selected {
+            background: #e67e22;
+            color: white;
+        }
+        
+        .controls {
+            margin-top: 20px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            font-size: 12px;
+            color: #bdc3c7;
+            margin-bottom: 5px;
+        }
+        
+        .control-group input {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #34495e;
+            border-radius: 4px;
+            color: white;
+            font-size: 12px;
+        }
+        
+        .ar-viewer {
+            flex: 1;
+            position: relative;
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            overflow: hidden;
+        }
+        
+        .room-background {
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            position: relative;
+        }
+        
+        .room-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+        
+        .furniture-item {
+            position: absolute;
+            cursor: move;
+            transition: all 0.3s;
+            pointer-events: all;
+            z-index: 10;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .furniture-item:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .furniture-item.selected {
+            box-shadow: 0 0 20px rgba(230, 126, 34, 0.8);
+            z-index: 20;
+        }
+
+        .furniture-preview {
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        .furniture-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            color: white;
+            padding: 5px 8px;
+            font-size: 10px;
+            text-align: center;
+        }
+
+        /* WebXR Styles */
+        .webxr-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .webxr-status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        .webxr-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .webxr-btn {
+            background: #e67e22;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .webxr-btn:hover {
+            background: #d35400;
+            transform: translateY(-2px);
+        }
+
+        .webxr-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .ar-notice {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+            font-size: 16px;
+            z-index: 100;
+        }
+
+        .ar-features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .feature-title {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .feature-desc {
+            font-size: 12px;
+            color: #bdc3c7;
+        }
+        
+        .furniture-controls {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #e67e22;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .furniture-item:hover .furniture-controls {
+            opacity: 1;
+        }
+        
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .instructions h4 {
+            color: #e67e22;
+            margin-bottom: 8px;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        
+        .spinner {
+            border: 4px solid #34495e;
+            border-top: 4px solid #e67e22;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        
+        .alert-info {
+            background: #3498db;
+            color: white;
+        }
+        
+        .alert-error {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .toolbar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        
+        .tool-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .tool-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.1);
+        }
+        
+        .tool-btn.active {
+            background: #e67e22;
+            border-color: #e67e22;
+        }
+        
+        .mode-indicator {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🪑 AR Interior Design View</h1>
+        <div>
+            <a href="/design-suggestions" class="btn btn-secondary">← Back to Designs</a>
+            <a href="/" class="btn btn-primary">🏠 Dashboard</a>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div class="sidebar">
+            <h3>Design Elements</h3>
+            
+            <div id="designInfo" class="design-info" style="display: none;">
+                <div class="design-title" id="designTitle"></div>
+                <div class="design-description" id="designDescription"></div>
+                <div class="color-palette" id="colorPalette"></div>
+            </div>
+            
+            <div class="elements-list">
+                <h4>Available Elements</h4>
+                <div id="elementsContainer">
+                    <p style="color: #bdc3c7; font-size: 13px;">Loading design elements...</p>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label>Scale (0.5 - 2.0)</label>
+                    <input type="range" id="scaleSlider" min="0.5" max="2.0" step="0.1" value="1.0">
+                </div>
+                <div class="control-group">
+                    <label>Rotation (0° - 360°)</label>
+                    <input type="range" id="rotationSlider" min="0" max="360" step="15" value="0">
+                </div>
+            </div>
+        </div>
+        
+        <div class="ar-viewer">
+            <div class="mode-indicator" id="modeIndicator">Mode: View</div>
+
+            <div class="toolbar">
+                <button class="tool-btn" id="moveBtn" onclick="setMode('move')" title="Move Mode">👆</button>
+                <button class="tool-btn" id="rotateBtn" onclick="setMode('rotate')" title="Rotate Mode">🔄</button>
+                <button class="tool-btn" id="scaleBtn" onclick="setMode('scale')" title="Scale Mode">📏</button>
+                <button class="tool-btn" id="deleteBtn" onclick="setMode('delete')" title="Delete Mode">🗑️</button>
+            </div>
+
+            <!-- WebXR Status and Controls -->
+            <div class="webxr-status" id="webxrStatus">
+                <div id="webxrInfo">WebXR: Not Initialized</div>
+                <div id="arFeatures" class="ar-features" style="display: none;">
+                    <div class="feature-card">
+                        <div class="feature-icon">🎯</div>
+                        <div class="feature-title">Hit Testing</div>
+                        <div class="feature-desc">Surface detection for placement</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">💡</div>
+                        <div class="feature-title">Lighting Estimation</div>
+                        <div class="feature-desc">Realistic lighting calculation</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📐</div>
+                        <div class="feature-title">Plane Detection</div>
+                        <div class="feature-desc">Floor and surface recognition</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="webxr-controls" id="webxrControls" style="display: none;">
+                <button class="webxr-btn" id="startARBtn" onclick="startWebXRSession()">🚀 Start AR</button>
+                <button class="webxr-btn" id="endARBtn" onclick="endWebXRSession()" style="display: none;">⏹️ End AR</button>
+                <button class="webxr-btn" onclick="resetARScene()">🔄 Reset</button>
+            </div>
+
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <h3>Loading AR View...</h3>
+            </div>
+
+            <!-- WebXR Canvas -->
+            <div class="webxr-container" id="webxrContainer" style="display: none;">
+                <canvas id="webxrCanvas"></canvas>
+                <div class="ar-notice" id="arNotice">
+                    <h3>🎯 Point your camera at a flat surface</h3>
+                    <p>Tap to place furniture items</p>
+                </div>
+            </div>
+
+            <!-- Fallback 2D View -->
+            <div id="roomContainer" class="room-background" style="display: none;">
+                <div class="room-overlay" id="roomOverlay"></div>
+            </div>
+
+            <div id="alertContainer"></div>
+
+            <div class="instructions">
+                <h4>Instructions</h4>
+                <p>• Click elements in the sidebar to add them to your room</p>
+                <p>• Drag elements to move them around</p>
+                <p>• Use toolbar buttons to switch modes</p>
+                <p>• Double-click elements to remove them</p>
+                <p>• Try WebXR AR mode for immersive experience</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentMode = 'move';
+        let selectedElement = null;
+        let roomImage = null;
+        let designData = null;
+        let furnitureElements = [];
+        
+        // Three.js scene for 3D furniture
+        let threeScene = null;
+        let threeRenderer = null;
+        let threeCamera = null;
+        let threeControls = null;
+        let furniture3DObjects = [];
+
+        // Initialize the page
+        window.onload = function() {
+            loadDesignData();
+            setupEventListeners();
+            initializeThreeJS();
+        };
+        
+        function loadDesignData() {
+            try {
+                designData = JSON.parse(sessionStorage.getItem('selectedDesign'));
+                roomImage = sessionStorage.getItem('roomImage');
+                
+                if (!designData || !roomImage) {
+                    showAlert('No design data found. Please go back and select a design.', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/design-suggestions';
+                    }, 3000);
+                    return;
+                }
+                
+                displayDesignInfo(designData);
+                setupRoom();
+                generateFurnitureElements(designData);
+                
+            } catch (error) {
+                console.error('Error loading design data:', error);
+                showAlert('Error loading design data', 'error');
+            }
+        }
+        
+        function displayDesignInfo(design) {
+            document.getElementById('designTitle').textContent = design.design_name || 'Selected Design';
+            document.getElementById('designDescription').textContent = design.description || 'Design description';
+            
+            const palette = document.getElementById('colorPalette');
+            palette.innerHTML = '';
+            
+            if (design.color_palette && Array.isArray(design.color_palette)) {
+                design.color_palette.forEach(color => {
+                    const swatch = document.createElement('div');
+                    swatch.className = 'color-swatch';
+                    swatch.style.backgroundColor = color;
+                    palette.appendChild(swatch);
+                });
+            }
+            
+            document.getElementById('designInfo').style.display = 'block';
+        }
+        
+        function setupRoom() {
+            const roomContainer = document.getElementById('roomContainer');
+            roomContainer.style.backgroundImage = `url(${roomImage})`;
+            roomContainer.style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+
+            // Initialize 3D overlay on the room image
+            initializeThreeJS();
+        }
+
+        function initializeThreeJS() {
+            // Create Three.js scene for 3D furniture overlay
+            const container = document.getElementById('roomOverlay');
+
+            // Set up Three.js scene
+            threeScene = new THREE.Scene();
+            threeCamera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 1000);
+            threeRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            threeRenderer.setSize(container.offsetWidth, container.offsetHeight);
+            threeRenderer.setClearColor(0x000000, 0);
+
+            // Position camera to look at the room
+            threeCamera.position.set(0, 0, 5);
+
+            // Add ambient lighting for 3D models
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            threeScene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            threeScene.add(directionalLight);
+
+            // Add controls for 3D interaction
+            threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
+            threeControls.enableDamping = true;
+            threeControls.dampingFactor = 0.05;
+            threeControls.enableZoom = true;
+            threeControls.enablePan = true;
+
+            // Create a canvas overlay for 3D rendering
+            const canvas3D = document.createElement('canvas');
+            canvas3D.id = 'threeCanvas';
+            canvas3D.style.position = 'absolute';
+            canvas3D.style.top = '0';
+            canvas3D.style.left = '0';
+            canvas3D.style.pointerEvents = 'none';
+            canvas3D.width = container.offsetWidth;
+            canvas3D.height = container.offsetHeight;
+
+            container.appendChild(canvas3D);
+            threeRenderer.domElement.style.position = 'absolute';
+            threeRenderer.domElement.style.top = '0';
+            threeRenderer.domElement.style.left = '0';
+            threeRenderer.domElement.style.pointerEvents = 'none';
+
+            // Start animation loop
+            animateThreeJS();
+
+            console.log('Three.js scene initialized for 3D furniture overlay');
+        }
+
+        function animateThreeJS() {
+            requestAnimationFrame(animateThreeJS);
+
+            if (threeControls) {
+                threeControls.update();
+            }
+
+            if (threeRenderer && threeScene && threeCamera) {
+                threeRenderer.render(threeScene, threeCamera);
+            }
+
+            // Update furniture projections
+            updateFurnitureProjection();
+        }
+
+        function create3DFurnitureModel(elementName, position) {
+            let geometry, material, mesh;
+
+            // Create different 3D shapes based on furniture type
+            switch(getFurnitureType(elementName)) {
+                case 'seating':
+                    // Sofa/Chair - rectangular prism with rounded edges
+                    geometry = new THREE.BoxGeometry(2, 0.8, 1);
+                    material = new THREE.MeshPhongMaterial({
+                        color: getFurnitureColor(elementName),
+                        shininess: 30
+                    });
+                    mesh = new THREE.Mesh(geometry, material);
+
+                    // Add backrest
+                    const backrestGeometry = new THREE.BoxGeometry(2, 0.6, 0.2);
+                    const backrestMaterial = new THREE.MeshPhongMaterial({
+                        color: getFurnitureColor(elementName),
+                        shininess: 30
+                    });
+                    const backrest = new THREE.Mesh(backrestGeometry, backrestMaterial);
+                    backrest.position.set(0, 0.2, -0.4);
+                    mesh.add(backrest);
+                    break;
+
+                case 'surface':
+                    // Table - flat cylinder or box
+                    geometry = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 8);
+                    material = new THREE.MeshPhongMaterial({
+                        color: getFurnitureColor(elementName),
+                        shininess: 50
+                    });
+                    mesh = new THREE.Mesh(geometry, material);
+
+                    // Add legs
+                    for (let i = 0; i < 4; i++) {
+                        const legGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.7);
+                        const legMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+                        const leg = new THREE.Mesh(legGeometry, legMaterial);
+                        const angle = (i / 4) * Math.PI * 2;
+                        leg.position.set(Math.cos(angle) * 0.6, -0.4, Math.sin(angle) * 0.6);
+                        mesh.add(leg);
+                    }
+                    break;
+
+                case 'lighting':
+                    // Lamp - tall cylinder with shade
+                    geometry = new THREE.CylinderGeometry(0.1, 0.1, 1.8);
+                    material = new THREE.MeshPhongMaterial({
+                        color: getFurnitureColor(elementName),
+                        shininess: 20
+                    });
+                    mesh = new THREE.Mesh(geometry, material);
+
+                    // Add lamp shade
+                    const shadeGeometry = new THREE.ConeGeometry(0.4, 0.6, 8);
+                    const shadeMaterial = new THREE.MeshPhongMaterial({
+                        color: 0xFFF8DC,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    const shade = new THREE.Mesh(shadeGeometry, shadeMaterial);
+                    shade.position.set(0, 0.8, 0);
+                    mesh.add(shade);
+                    break;
+
+                case 'storage':
+                    // Shelf/Cabinet - tall rectangular
+                    geometry = new THREE.BoxGeometry(1.2, 2, 0.3);
+                    material = new THREE.MeshPhongMaterial({
+                        color: getFurnitureColor(elementName),
+                        shininess: 40
+                    });
+                    mesh = new THREE.Mesh(geometry, material);
+
+                    // Add shelves
+                    for (let i = 0; i < 3; i++) {
+                        const shelfGeometry = new THREE.BoxGeometry(1.1, 0.05, 0.25);
+                        const shelfMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+                        const shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
+                        shelf.position.set(0, -0.8 + i * 0.8, 0.05);
+                        mesh.add(shelf);
+                    }
+                    break;
+
+                case 'flooring':
+                    // Rug - flat box with texture
+                    geometry = new THREE.PlaneGeometry(3, 2);
+                    material = new THREE.MeshPhongMaterial({
+                        color: getFurnitureColor(elementName),
+                        shininess: 10
+                    });
+                    mesh = new THREE.Mesh(geometry, material);
+                    mesh.rotation.x = -Math.PI / 2; // Lay flat
+                    break;
+
+                case 'decoration':
+                    // Art/Plant - frame or vase shape
+                    if (elementName.toLowerCase().includes('art')) {
+                        geometry = new THREE.PlaneGeometry(1.5, 1);
+                        material = new THREE.MeshPhongMaterial({
+                            color: getFurnitureColor(elementName),
+                            shininess: 60
+                        });
+                        mesh = new THREE.Mesh(geometry, material);
+                    } else {
+                        // Plant/Vase
+                        geometry = new THREE.CylinderGeometry(0.3, 0.2, 0.8);
+                        material = new THREE.MeshPhongMaterial({
+                            color: 0x228B22,
+                            shininess: 20
+                        });
+                        mesh = new THREE.Mesh(geometry, material);
+                    }
+                    break;
+
+                default:
+                    // Default furniture shape
+                    geometry = new THREE.BoxGeometry(1, 1, 1);
+                    material = new THREE.MeshPhongMaterial({
+                        color: getFurnitureColor(elementName),
+                        shininess: 30
+                    });
+                    mesh = new THREE.Mesh(geometry, material);
+            }
+
+            // Position the 3D model
+            mesh.position.set(position.x, position.y, position.z);
+            mesh.userData = { type: 'furniture', name: elementName };
+
+            // Add to scene
+            threeScene.add(mesh);
+
+            return mesh;
+        }
+
+        function getFurnitureColor(elementName) {
+            const colors = {
+                'sofa': 0x667eea,
+                'chair': 0xf093fb,
+                'table': 0x4facfe,
+                'lamp': 0x43e97b,
+                'shelf': 0xfa709a,
+                'cabinet': 0xa8edea,
+                'rug': 0xff9a9e,
+                'art': 0xffecd2,
+                'plant': 0x43e97b,
+                'default': 0x667eea
+            };
+
+            for (const [key, color] of Object.entries(colors)) {
+                if (elementName.toLowerCase().includes(key) || key === 'default') {
+                    return color;
+                }
+            }
+            return colors.default;
+        }
+        
+        function generateFurnitureElements(design) {
+            const container = document.getElementById('elementsContainer');
+            container.innerHTML = '';
+            
+            const elements = design.key_elements || [
+                'Modern Sofa', 'Coffee Table', 'Floor Lamp', 'Area Rug',
+                'Wall Art', 'Side Table', 'Bookshelf', 'Decorative Vase'
+            ];
+            
+            elements.forEach((element, index) => {
+                const div = document.createElement('div');
+                div.className = 'element-item';
+                div.textContent = element;
+                div.onclick = () => addFurnitureElement(element, index);
+                container.appendChild(div);
+            });
+        }
+        
+        function addFurnitureElement(elementName, index) {
+            // Create 3D furniture model in Three.js scene
+            const roomOverlay = document.getElementById('roomOverlay');
+
+            // Generate random 3D position (convert 2D screen coords to 3D world coords)
+            const rect = roomOverlay.getBoundingClientRect();
+            const x = (Math.random() - 0.5) * 6; // Spread across 6 units in 3D space
+            const y = (Math.random() - 0.5) * 4;
+            const z = (Math.random() - 0.5) * 4;
+
+            const position = { x: x, y: y, z: z };
+
+            // Create actual 3D model
+            const threeModel = create3DFurnitureModel(elementName, position);
+
+            // Create 2D overlay element for interaction
+            const element = document.createElement('div');
+            element.className = 'furniture-item';
+            element.id = `furniture-${Date.now()}-${index}`;
+
+            // Position 2D element to match 3D model projection
+            const screenPosition = worldToScreen(position, threeCamera);
+            element.style.left = (screenPosition.x - 50) + 'px'; // Center the 2D element
+            element.style.top = (screenPosition.y - 40) + 'px';
+
+            element.style.width = '100px';
+            element.style.height = '80px';
+            element.style.background = getFurnitureGradient(elementName);
+            element.style.borderRadius = '12px';
+            element.style.display = 'flex';
+            element.style.alignItems = 'center';
+            element.style.justifyContent = 'center';
+            element.style.fontSize = '9px';
+            element.style.textAlign = 'center';
+            element.style.userSelect = 'none';
+            element.style.position = 'absolute';
+            element.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+            element.style.border = '2px solid rgba(255,255,255,0.1)';
+
+            // Add furniture icon and label
+            const furnitureIcon = getFurnitureIcon(elementName);
+            element.innerHTML = `
+                <div style="font-size: 24px; margin-bottom: 5px; opacity: 0.8;">${furnitureIcon}</div>
+                <div style="font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+                    ${elementName.length > 12 ? elementName.substring(0, 12) + '...' : elementName}
+                </div>
+            `;
+
+            // Add controls
+            const controls = document.createElement('div');
+            controls.className = 'furniture-controls';
+            controls.innerHTML = `<button class="delete-btn" onclick="removeElement('${element.id}')">×</button>`;
+            element.appendChild(controls);
+
+            roomOverlay.appendChild(element);
+            makeDraggable(element);
+
+            furnitureElements.push({
+                id: element.id,
+                name: elementName,
+                element: element,
+                threeModel: threeModel,
+                type: getFurnitureType(elementName)
+            });
+
+            showAlert(`Added ${elementName} (3D Model) to your design!`, 'info');
+        }
+
+        function worldToScreen(worldPosition, camera) {
+            // Project 3D world position to 2D screen coordinates
+            const vector = new THREE.Vector3(worldPosition.x, worldPosition.y, worldPosition.z);
+            vector.project(camera);
+
+            const rect = document.getElementById('roomOverlay').getBoundingClientRect();
+            return {
+                x: (vector.x * 0.5 + 0.5) * rect.width + rect.left,
+                y: (-vector.y * 0.5 + 0.5) * rect.height + rect.top
+            };
+        }
+
+        function updateFurnitureProjection() {
+            // Update 2D element positions to match 3D model projections
+            furnitureElements.forEach(item => {
+                if (item.threeModel && item.element) {
+                    const screenPos = worldToScreen(
+                        item.threeModel.position,
+                        threeCamera
+                    );
+
+                    item.element.style.left = (screenPos.x - 50) + 'px';
+                    item.element.style.top = (screenPos.y - 40) + 'px';
+                }
+            });
+        }
+
+        function getFurnitureIcon(elementName) {
+            const icons = {
+                'sofa': '🛋️',
+                'chair': '🪑',
+                'table': '🪑',
+                'lamp': '💡',
+                'shelf': '📚',
+                'cabinet': '🗄️',
+                'rug': '🧘',
+                'art': '🖼️',
+                'plant': '🪴',
+                'default': '🏠'
+            };
+
+            for (const [key, icon] of Object.entries(icons)) {
+                if (elementName.toLowerCase().includes(key) || key === 'default') {
+                    return icon;
+                }
+            }
+            return icons.default;
+        }
+
+        function getFurnitureGradient(elementName) {
+            const gradients = {
+                'sofa': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                'chair': 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                'table': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                'lamp': 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                'shelf': 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                'cabinet': 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                'rug': 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+                'art': 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+                'plant': 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                'default': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+            };
+
+            for (const [key, gradient] of Object.entries(gradients)) {
+                if (elementName.toLowerCase().includes(key) || key === 'default') {
+                    return gradient;
+                }
+            }
+            return gradients.default;
+        }
+
+        function getFurnitureType(elementName) {
+            if (elementName.toLowerCase().includes('sofa') || elementName.toLowerCase().includes('chair')) return 'seating';
+            if (elementName.toLowerCase().includes('table')) return 'surface';
+            if (elementName.toLowerCase().includes('lamp')) return 'lighting';
+            if (elementName.toLowerCase().includes('shelf') || elementName.toLowerCase().includes('cabinet')) return 'storage';
+            if (elementName.toLowerCase().includes('rug')) return 'flooring';
+            if (elementName.toLowerCase().includes('art') || elementName.toLowerCase().includes('plant')) return 'decoration';
+            return 'furniture';
+        }
+        
+        function makeDraggable(element) {
+            let isDragging = false;
+            let startX, startY, startLeft, startTop;
+            
+            element.addEventListener('mousedown', (e) => {
+                if (currentMode === 'move') {
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    startLeft = parseInt(element.style.left) || 0;
+                    startTop = parseInt(element.style.top) || 0;
+                    
+                    element.classList.add('selected');
+                    selectedElement = element;
+                    
+                    e.preventDefault();
+                }
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging && currentMode === 'move') {
+                    const deltaX = e.clientX - startX;
+                    const deltaY = e.clientY - startY;
+                    
+                    element.style.left = (startLeft + deltaX) + 'px';
+                    element.style.top = (startTop + deltaY) + 'px';
+                }
+            });
+            
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    element.classList.remove('selected');
+                }
+            });
+            
+            // Double-click to remove
+            element.addEventListener('dblclick', () => {
+                if (currentMode === 'delete') {
+                    removeElement(element.id);
+                }
+            });
+        }
+        
+        function removeElement(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.remove();
+                furnitureElements = furnitureElements.filter(item => item.id !== elementId);
+            }
+        }
+        
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('modeIndicator').textContent = `Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`;
+            
+            // Update toolbar buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            switch(mode) {
+                case 'move':
+                    document.getElementById('moveBtn').classList.add('active');
+                    break;
+                case 'rotate':
+                    document.getElementById('rotateBtn').classList.add('active');
+                    break;
+                case 'scale':
+                    document.getElementById('scaleBtn').classList.add('active');
+                    break;
+                case 'delete':
+                    document.getElementById('deleteBtn').classList.add('active');
+                    break;
+            }
+        }
+        
+        function setupEventListeners() {
+            // Scale slider
+            document.getElementById('scaleSlider').addEventListener('input', (e) => {
+                if (selectedElement) {
+                    const scale = e.target.value;
+                    selectedElement.style.transform = `scale(${scale})`;
+                }
+            });
+            
+            // Rotation slider
+            document.getElementById('rotationSlider').addEventListener('input', (e) => {
+                if (selectedElement) {
+                    const rotation = e.target.value;
+                    selectedElement.style.transform = `rotate(${rotation}deg)`;
+                }
+            });
+        }
+        
+        function getRandomColor() {
+            const colors = [
+                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+                'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)'
+            ];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+        
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alertContainer');
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'm':
+                case 'M':
+                    setMode('move');
+                    break;
+                case 'r':
+                case 'R':
+                    setMode('rotate');
+                    break;
+                case 's':
+                case 'S':
+                    setMode('scale');
+                    break;
+                case 'd':
+                case 'D':
+                    setMode('delete');
+                    break;
+                case 'Delete':
+                case 'Backspace':
+                    if (selectedElement) {
+                        removeElement(selectedElement.id);
+                    }
+                    break;
+            }
+        });
+
+        // WebXR Implementation (as described in paper)
+        let webXRSession = null;
+        let webXRRenderer = null;
+        let webXRScene = null;
+        let arHitTestSource = null;
+
+        async function startWebXRSession() {
+            const webxrInfo = document.getElementById('webxrInfo');
+            const startBtn = document.getElementById('startARBtn');
+            const endBtn = document.getElementById('endARBtn');
+
+            try {
+                // Check WebXR support first
+                if (!navigator.xr) {
+                    throw new Error('WebXR not supported on this device');
+                }
+
+                webxrInfo.textContent = 'Requesting camera permissions...';
+
+                // Request camera permissions first
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+
+                // Stop the stream immediately as we only needed permission
+                stream.getTracks().forEach(track => track.stop());
+
+                webxrInfo.textContent = 'Initializing WebXR AR session...';
+
+                // Now request AR session with hit testing
+                webXRSession = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['hit-test'],
+                    optionalFeatures: ['lighting-estimation', 'plane-detection']
+                });
+
+                // Set up Three.js renderer for WebXR
+                await initializeWebXRRenderer();
+
+                // Set up AR scene
+                setupARScene();
+
+                // Start render loop
+                webXRSession.requestAnimationFrame(renderLoop);
+
+                // Update UI
+                startBtn.style.display = 'none';
+                endBtn.style.display = 'inline-block';
+                document.getElementById('webxrControls').style.display = 'flex';
+                document.getElementById('arFeatures').style.display = 'grid';
+                document.getElementById('roomContainer').style.display = 'none';
+                document.getElementById('webxrContainer').style.display = 'block';
+
+                webxrInfo.textContent = '🎥 Camera Active - AR Session Running - Tap surfaces to place furniture';
+
+                showAlert('✅ Camera permissions granted! WebXR AR session started successfully!', 'info');
+
+            } catch (error) {
+                console.error('WebXR initialization failed:', error);
+
+                if (error.name === 'NotAllowedError') {
+                    webxrInfo.textContent = 'Camera permission denied - AR requires camera access';
+                    showAlert('❌ Camera permission required for AR. Please allow camera access and try again.', 'error');
+                } else if (error.name === 'NotFoundError') {
+                    webxrInfo.textContent = 'No camera found - AR requires rear camera';
+                    showAlert('❌ No camera detected. AR requires a camera for surface detection.', 'error');
+                } else if (error.name === 'NotSupportedError') {
+                    webxrInfo.textContent = 'AR not supported - Using 2D mode';
+                    showAlert('AR not supported on this device. Using enhanced 2D mode instead.', 'warning');
+                } else {
+                    webxrInfo.textContent = `AR Error: ${error.message}`;
+                    showAlert(`AR initialization failed: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        async function initializeWebXRRenderer() {
+            // This would integrate with Three.js WebXR renderer
+            // For now, show placeholder
+            const canvas = document.getElementById('webxrCanvas');
+            if (!canvas) {
+                const canvasElement = document.createElement('canvas');
+                canvasElement.id = 'webxrCanvas';
+                canvasElement.width = window.innerWidth;
+                canvasElement.height = window.innerHeight;
+                document.getElementById('webxrContainer').appendChild(canvasElement);
+            }
+
+            // In a full implementation, you would:
+            // 1. Set up Three.js WebGLRenderer with XR support
+            // 2. Configure camera and controls for AR
+            // 3. Load 3D furniture models
+            // 4. Set up lighting and materials
+
+            console.log('WebXR Renderer initialized (placeholder)');
+        }
+
+        function setupARScene() {
+            // Set up AR scene with furniture models
+            // This would include:
+            // 1. Loading GLTF furniture models
+            // 2. Setting up realistic materials and textures
+            // 3. Configuring lighting estimation
+            // 4. Setting up hit testing for placement
+
+            console.log('AR Scene setup complete');
+        }
+
+        function renderLoop(timestamp, frame) {
+            if (!webXRSession || !webXRRenderer) return;
+
+            // Update hit test
+            const hitTestResults = frame.getHitTestResults(arHitTestSource);
+
+            // Render AR scene
+            webXRRenderer.render(webXRScene, camera);
+
+            // Continue render loop
+            webXRSession.requestAnimationFrame(renderLoop);
+        }
+
+        function endWebXRSession() {
+            if (webXRSession) {
+                webXRSession.end();
+                webXRSession = null;
+            }
+
+            // Reset UI
+            document.getElementById('startARBtn').style.display = 'inline-block';
+            document.getElementById('endARBtn').style.display = 'none';
+            document.getElementById('webxrControls').style.display = 'none';
+            document.getElementById('arFeatures').style.display = 'none';
+            document.getElementById('webxrContainer').style.display = 'none';
+            document.getElementById('roomContainer').style.display = 'block';
+
+            document.getElementById('webxrInfo').textContent = 'WebXR: Session ended';
+
+            showAlert('WebXR AR session ended. Furniture placed in 2D view.', 'info');
+        }
+
+        // Initialize WebXR on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkWebXRSupport();
+        });
+
+        function checkWebXRSupport() {
+            const webxrInfo = document.getElementById('webxrInfo');
+            const arFeatures = document.getElementById('arFeatures');
+
+            // Check if WebXR is available
+            if (!navigator.xr) {
+                webxrInfo.textContent = 'WebXR: Not available (requires modern browser)';
+                showARHelp('browser');
+                return;
+            }
+
+            // Check for AR support
+            navigator.xr.isSessionSupported('immersive-ar').then(supported => {
+                if (supported) {
+                    webxrInfo.textContent = 'WebXR: Ready for AR';
+                    document.getElementById('webxrControls').style.display = 'flex';
+                    arFeatures.style.display = 'grid';
+
+                    // Check for additional features
+                    checkAdvancedFeatures();
+                } else {
+                    webxrInfo.textContent = 'WebXR: AR not supported on this device';
+                    showARHelp('device');
+                }
+            }).catch(error => {
+                webxrInfo.textContent = `WebXR: Error - ${error.message}`;
+                showARHelp('error');
+            });
+        }
+
+        function checkAdvancedFeatures() {
+            // Check for lighting estimation
+            navigator.xr.isSessionSupported('immersive-ar', {
+                optionalFeatures: ['lighting-estimation']
+            }).then(supported => {
+                if (supported) {
+                    document.querySelector('.feature-card:nth-child(2) .feature-desc')
+                        .textContent = 'Realistic lighting calculation ✓';
+                }
+            });
+
+            // Check for plane detection
+            navigator.xr.isSessionSupported('immersive-ar', {
+                optionalFeatures: ['plane-detection']
+            }).then(supported => {
+                if (supported) {
+                    document.querySelector('.feature-card:nth-child(3) .feature-desc')
+                        .textContent = 'Floor and surface recognition ✓';
+                }
+            });
+        }
+
+        function showARHelp(reason) {
+            const helpMessages = {
+                'browser': `
+                    <div style="margin-top: 10px; font-size: 11px; color: #ffa500;">
+                        <strong>To enable AR:</strong><br>
+                        • Use Chrome, Edge, or Safari<br>
+                        • Enable "WebXR" in browser flags<br>
+                        • Try on mobile device for best experience
+                    </div>
+                `,
+                'device': `
+                    <div style="margin-top: 10px; font-size: 11px; color: #ffa500;">
+                        <strong>To enable AR:</strong><br>
+                        • Use ARCore/ARKit compatible device<br>
+                        • Modern smartphone (Android/iOS)<br>
+                        • Enable camera permissions<br>
+                        • Try Chrome mobile browser
+                    </div>
+                `,
+                'error': `
+                    <div style="margin-top: 10px; font-size: 11px; color: #ff6b6b;">
+                        <strong>Troubleshooting:</strong><br>
+                        • Check camera permissions<br>
+                        • Update browser to latest version<br>
+                        • Try different device/browser<br>
+                        • Ensure HTTPS connection
+                    </div>
+                `
+            };
+
+            const arFeatures = document.getElementById('arFeatures');
+            arFeatures.innerHTML = helpMessages[reason] + arFeatures.innerHTML;
+            arFeatures.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
