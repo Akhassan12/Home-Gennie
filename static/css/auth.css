@@ -50,6 +50,130 @@ body {
     font-weight: 500;
 }
 
+.password-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input-wrapper input {
+    width: 100%;
+    padding-right: 45px;
+}
+
+.toggle-password-btn {
+    position: absolute;
+    right: 15px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.3s ease;
+    border-radius: 6px;
+}
+
+.toggle-password-btn:hover {
+    background: rgba(230, 126, 34, 0.1);
+    transform: scale(1.1);
+}
+
+.toggle-password-btn:active {
+    transform: scale(0.95);
+}
+
+.eye-icon {
+    display: inline-block;
+    color: #e67e22;
+    transition: all 0.3s ease;
+}
+
+.eye-open {
+    animation: eyeBlink 3s infinite;
+}
+
+.eye-closed {
+    opacity: 0.7;
+}
+
+.eye-pupil {
+    animation: pupilMovement 2s ease-in-out infinite;
+    transform-origin: 12px 12px;
+}
+
+/* Eye state transition animations */
+@keyframes eyeAnimateOpen {
+    0% {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes eyeAnimateClose {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+}
+
+@keyframes eyeBlink {
+    0%, 20%, 100% {
+        opacity: 1;
+    }
+    10% {
+        opacity: 0.3;
+    }
+}
+
+@keyframes pupilMovement {
+    0%, 100% {
+        cx: 12;
+        cy: 12;
+    }
+    25% {
+        cx: 14;
+        cy: 11;
+    }
+    50% {
+        cx: 10;
+        cy: 13;
+    }
+    75% {
+        cx: 13;
+        cy: 10;
+    }
+}
+
+.eye-animate-open {
+    animation: eyeAnimateOpen 0.4s ease !important;
+}
+
+.eye-animate-close {
+    animation: eyeAnimateClose 0.4s ease !important;
+}
+
+.toggle-password-btn:hover .eye-icon {
+    color: #e67e22;
+    filter: drop-shadow(0 0 4px rgba(230, 126, 34, 0.5));
+}
+
 .form-group input {
     width: 100%;
     padding: 15px 20px;

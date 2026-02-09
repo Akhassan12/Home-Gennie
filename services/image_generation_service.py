@@ -172,8 +172,33 @@ class ImageGenerationProcess:
         self.ai_analyzer = ai_analyzer
         self.design_generator = design_generator
         self.qwen_pipeline = None
+        self.openrouter_client = None
+        self.openrouter_model = None
+        
+        # Initialize OpenRouter
+        self._initialize_openrouter()
+        
         if QWEN_AVAILABLE:
             self._initialize_qwen_pipeline()
+
+    def _initialize_openrouter(self):
+        """Initialize OpenRouter client for Flux image generation"""
+        try:
+            api_key = os.environ.get('OPENROUTER_API_KEY', '')
+            model = os.environ.get('OPENROUTER_MODEL', 'black-forest-labs/flux.2-flex')
+            
+            if api_key and OPENAI_AVAILABLE:
+                self.openrouter_client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=api_key
+                )
+                self.openrouter_model = "black-forest-labs/flux.2-pro"
+                print("OpenRouter initialized with Flux 2 Pro")
+            else:
+                print("OpenRouter API key not configured")
+        except Exception as e:
+            print(f"Error initializing OpenRouter: {e}")
+            self.openrouter_client = None
 
     def _initialize_qwen_pipeline(self):
         """Initialize the Qwen image editing pipeline"""
@@ -478,6 +503,121 @@ The result should be a realistic visualization of how this exact room would look
         image = Image.new('RGB', (width, height), rgb_color)
 
         return image
+
+    def _generate_with_flux(self, prompt: str, design_filename: str) -> Optional[str]:
+        """
+        Generate image using OpenRouter Flux API
+
+        Args:
+            prompt: Image generation prompt
+            design_filename: Output filename
+
+        Returns:
+            URL of generated image or None
+        """
+        try:
+            if not self.openrouter_client:
+                print("OpenRouter client not initialized")
+                return None
+
+            print(f"Generating image with Flux via OpenRouter...")
+            
+            response = self.openrouter_client.images.generate(
+                model=self.openrouter_model,
+                prompt=prompt,
+                size="1024x1024",
+                quality="standard",
+                n=1,
+            )
+
+            # Get the image URL from response
+            image_url = response.data[0].url
+            
+            # Download and save the image
+            design_file_path = os.path.join(self.storage_service.upload_folder, design_filename)
+            image_response = requests.get(image_url, timeout=60)
+            image_response.raise_for_status()
+            
+            with open(design_file_path, 'wb') as f:
+                f.write(image_response.content)
+            
+            design_url = f"{self.storage_service.base_url}/{design_filename}"
+            print(f"Flux image saved: {design_url}")
+            
+            return design_url
+
+        except Exception as e:
+            print(f"Error generating Flux image: {e}")
+            return None
+
+    def _generate_design_image_v2(self, room_image_data: str, design: Dict[str, Any], process_id: str, design_index: int) -> Optional[Dict[str, Any]]:
+        """
+        Generate design image using Flux model with OpenRouter
+
+        Args:
+            room_image_data: Original room image BASE64 data
+            design: Design concept dictionary
+            process_id: Process ID for file naming
+            design_index: Index of the design
+
+        Returns:
+            Dictionary with design image URLs and metadata
+        """
+        try:
+            design_name = design.get('design_name', f'Design_{design_index + 1}')
+            style = design.get('style', 'modern')
+            color_palette = design.get('color_palette', ['#FFFFFF', '#F5F5F5', '#333333'])
+
+            # Create prompt for Flux
+            prompt = f"""{style} interior design makeover. Room transformed with {style} furniture, 
+            color palette including {', '.join(color_palette[:3])}. Professional interior design visualization, 
+            photorealistic, high quality, 8k, interior architecture, beautiful lighting.
+
+            Design: {design_name}
+            Style: {style}
+            """
+
+            design_filename = f"design_{process_id}_{design_index}.png"
+
+            # Try Flux first
+            if self.openrouter_client:
+                image_url = self._generate_with_flux(prompt, design_filename)
+                if image_url:
+                    return {
+                        'design_name': design_name,
+                        'design_style': style,
+                        'color_palette': color_palette,
+                        'final_image_url': image_url,
+                        'design_index': design_index,
+                        'status': 'generated',
+                        'image_generation_prompt': prompt,
+                        'generation_method': 'flux_openrouter',
+                        'note': f'Generated using {self.openrouter_model}'
+                    }
+
+            # Fallback to placeholder
+            print("Falling back to placeholder generation...")
+            placeholder_image = self._create_design_specific_placeholder(design, style)
+            placeholder_path = os.path.join(self.storage_service.upload_folder, design_filename)
+            placeholder_image.save(placeholder_path)
+            
+            design_url = f"{self.storage_service.base_url}/{design_filename}"
+
+            return {
+                'design_name': design_name,
+                'design_style': style,
+                'color_palette': color_palette,
+                'design_image_url': design_url,
+                'design_index': design_index,
+                'status': 'generated',
+                'image_generation_prompt': prompt,
+                'generation_method': 'placeholder',
+                'note': 'Placeholder (Flux unavailable)'
+            }
+
+        except Exception as e:
+            print(f"Error generating design image: {e}")
+            return None
 
 # Create singleton instance
 image_generation_service = ImageGenerationProcess()

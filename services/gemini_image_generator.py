@@ -61,9 +61,12 @@ class GeminiImageGenerator:
                         http_client=http_client
                     )
 
-                    # Test connection with Gemini image generation model
+                    # Test connection with Flux model
                     image_models = [
-                        "gemini-2.0-flash-exp-image-generation"
+                        "black-forest-labs/flux.2-pro",
+                        "sourceful/riverflow-v2-pro",
+                        "black-forest-labs/flux.2-klein-4b",
+                        "black-forest-labs/flux.2-flex"
                     ]
 
                     for model in image_models:
@@ -73,7 +76,7 @@ class GeminiImageGenerator:
                             test_response = self.client.images.generate(
                                 model=model,
                                 prompt="A simple test image of a room",
-                                size="512x512",
+                                size="1024x1024",
                                 n=1
                             )
                             if test_response and test_response.data:
@@ -86,7 +89,7 @@ class GeminiImageGenerator:
                             continue
 
                     if not self.use_api:
-                        print("❌ No working image generation models found")
+                        print("[WARNING] No working image generation models found")
 
                 finally:
                     # Restore proxy settings

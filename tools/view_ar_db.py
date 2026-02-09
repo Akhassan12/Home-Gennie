@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3https://saoudrizwan.gallerycdn.vsassets.io/extensions/saoudrizwan/claude-dev/3.57.1/1770328164021/Microsoft.VisualStudio.Services.Icons.Default
 """
 Quick AR Database Viewer
 Simple script to view AR database contents

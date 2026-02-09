@@ -1,7 +1,6 @@
-# services/design_generator.py - PURE GEMINI + OFFLINE DESIGN GENERATION
+# services/design_generator.py - OPENROUTER + OFFLINE DESIGN GENERATION
 """
-Design Generator Service - No OpenRouter dependency
-Uses only Gemini API and intelligent offline fallbacks
+Design Generator Service - Uses OpenRouter API and intelligent offline fallbacks
 """
 import os
 from typing import Dict, List, Any
@@ -11,16 +10,15 @@ from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
-# Import Gemini Image Generator (with lazy loading to avoid circular imports)
-GEMINI_AVAILABLE = False
+# Import Image Generator (with lazy loading to avoid circular imports)
+OPENROUTER_AVAILABLE = False
 gemini_image_generator = None
 
-def _get_gemini_generator():
-    """Lazy load Gemini generator to avoid circular imports"""
-    global gemini_image_generator, GEMINI_AVAILABLE
+def _get_image_generator():
+    """Lazy load image generator to avoid circular imports"""
+    global gemini_image_generator, OPENROUTER_AVAILABLE
     if gemini_image_generator is None:
         try:
-            # Try importing with full path
             import sys
             import os
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -31,67 +29,86 @@ def _get_gemini_generator():
                 sys.path.insert(0, services_dir)
 
             from gemini_image_generator import gemini_image_generator
-            GEMINI_AVAILABLE = True
-            print("[SUCCESS] Gemini Image Generator loaded successfully")
+            OPENROUTER_AVAILABLE = True
+            print("[SUCCESS] Image Generator loaded successfully")
         except ImportError as e:
             try:
-                # Try alternative import
                 from ..services.gemini_image_generator import gemini_image_generator
-                GEMINI_AVAILABLE = True
-                print("[SUCCESS] Gemini Image Generator loaded with relative import")
+                OPENROUTER_AVAILABLE = True
+                print("[SUCCESS] Image Generator loaded with relative import")
             except ImportError:
                 try:
-                    # Direct import
                     from services.gemini_image_generator import gemini_image_generator
-                    GEMINI_AVAILABLE = True
-                    print("[SUCCESS] Gemini Image Generator loaded with direct import")
+                    OPENROUTER_AVAILABLE = True
+                    print("[SUCCESS] Image Generator loaded with direct import")
                 except ImportError as e2:
-                    print(f"[WARNING] Gemini Image Generator not available: {e2}")
-                    GEMINI_AVAILABLE = False
+                    print(f"[WARNING] Image Generator not available: {e2}")
+                    OPENROUTER_AVAILABLE = False
     return gemini_image_generator
 
-# Try to import Gemini for design generation
+# Try to import OpenAI for OpenRouter API
 try:
-    import google.generativeai as genai
-    GEMINI_TEXT_AVAILABLE = True
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
 except ImportError:
-    genai = None
-    GEMINI_TEXT_AVAILABLE = False
-    print("[WARNING] Google Generative AI not available for text generation")
+    OpenAI = None
+    OPENAI_AVAILABLE = False
+    print("[WARNING] OpenAI package not available")
 
 class DesignGenerator:
     def __init__(self):
-        """Initialize with Gemini API for text generation"""
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        self.gemini_model = None
-        self.use_gemini = False
+        """Initialize with OpenRouter API for text generation"""
+        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+        self.client = None
+        self.use_openrouter = False
 
-        if self.gemini_api_key and GEMINI_TEXT_AVAILABLE:
+        if self.openrouter_api_key and len(self.openrouter_api_key) > 20 and OPENAI_AVAILABLE:
             try:
-                # Configure Gemini
-                genai.configure(api_key=self.gemini_api_key)
+                old_proxies = {}
+                for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
+                    if proxy_var in os.environ:
+                        old_proxies[proxy_var] = os.environ.pop(proxy_var)
 
-                # Test with text generation model
-                self.gemini_model = genai.GenerativeModel('models/gemini-2.0-flash-exp')
-                print("[SUCCESS] Gemini Design Generator initialized")
-                self.use_gemini = True
+                try:
+                    import httpx
+                    http_client = httpx.Client(timeout=60.0)
+
+                    self.client = OpenAI(
+                        base_url="https://openrouter.ai/api/v1",
+                        api_key=self.openrouter_api_key,
+                        http_client=http_client
+                    )
+
+                    test_response = self.client.chat.completions.create(
+                        model="google/gemma-3-27b-it:free",
+                        messages=[{"role": "user", "content": "Test"}],
+                        max_tokens=10
+                    )
+                    
+                    self.use_openrouter = True
+                    self.model = "google/gemma-3-27b-it:free"
+                    print("[SUCCESS] OpenRouter Design Generator initialized")
+                    
+                finally:
+                    for proxy_var, proxy_value in old_proxies.items():
+                        os.environ[proxy_var] = proxy_value
 
             except Exception as e:
-                print(f"[WARNING] Gemini text generation failed: {str(e)[:80]}")
-                self.gemini_model = None
+                print(f"[WARNING] OpenRouter text generation failed: {str(e)[:80]}")
+                self.client = None
         else:
             print("[INFO] Using offline design generation only")
 
     def generate_design_suggestions(self, room_analysis: Dict[str, Any],
                                 preferences: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """Generate design suggestions using Gemini or offline fallbacks"""
-        if self.use_gemini and self.gemini_model:
-            return self._generate_with_gemini(room_analysis, preferences)
+        """Generate design suggestions using OpenRouter or offline fallbacks"""
+        if self.use_openrouter and self.client:
+            return self._generate_with_openrouter(room_analysis, preferences)
         else:
             return self._get_fallback_designs(room_analysis)
 
-    def _generate_with_gemini(self, room_analysis: Dict, preferences: Dict = None) -> List[Dict]:
-        """Generate designs using Gemini API"""
+    def _generate_with_openrouter(self, room_analysis: Dict, preferences: Dict = None) -> List[Dict]:
+        """Generate designs using OpenRouter API"""
         try:
             room_type = room_analysis.get('room_type', 'Room')
             budget = preferences.get('budget', 'moderate') if preferences else 'moderate'
@@ -134,20 +151,16 @@ Example format:
 
 Return ONLY valid JSON array, no other text."""
 
-            # Generate with Gemini
-            response = self.gemini_model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=2000,
-                    temperature=0.8,
-                    top_p=0.9
-                )
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
+                temperature=0.8
             )
 
-            result = response.text
-            print("[SUCCESS] Gemini design generation completed")
+            result = response.choices[0].message.content
+            print("[SUCCESS] OpenRouter design generation completed")
 
-            # Parse JSON response
             if "```json" in result:
                 result = result.split("```json")[1].split("```")[0].strip()
             elif "```" in result:
@@ -157,16 +170,14 @@ Return ONLY valid JSON array, no other text."""
             return designs if isinstance(designs, list) else [designs]
 
         except Exception as e:
-            print(f"[WARNING] Gemini design generation failed: {str(e)[:100]}")
+            print(f"[WARNING] OpenRouter design generation failed: {str(e)[:100]}")
             return self._get_fallback_designs(room_analysis)
 
     def _get_fallback_designs(self, room_analysis: Dict) -> List[Dict]:
         """Generate context-aware fallback designs based on room analysis"""
         room_type = room_analysis.get('room_type', 'room').lower()
         room_size = room_analysis.get('room_size', 'medium').lower()
-        current_style = room_analysis.get('current_style', {}).get('primary_style', 'basic').lower()
 
-        # Base designs that can be customized based on room analysis
         base_designs = [
             {
                 "template": "modern_minimalist",
@@ -203,7 +214,6 @@ Return ONLY valid JSON array, no other text."""
             }
         ]
 
-        # Customize designs based on room analysis
         customized_designs = []
         for design in base_designs:
             custom_design = design.copy()
@@ -214,10 +224,9 @@ Return ONLY valid JSON array, no other text."""
             custom_design["budget_estimate"] = design["budget"]
             custom_design["implementation_steps"] = design["steps"]
 
-            # Customize based on room type
             if room_type == "bedroom":
                 custom_design["design_name"] = f"Bedroom - {design['name']}"
-                custom_design["description"] = f"Transform your bedroom into a {design['style'].lower()} sanctuary for rest and relaxation."
+                custom_design["description"] = f"Transform your bedroom into a {design['style'].lower()} sanctuary."
                 custom_design["key_elements"] = [elem.replace("sofa", "bed").replace("Platform sofa", "Platform bed") for elem in design["elements"]]
             elif room_type == "kitchen":
                 custom_design["design_name"] = f"Kitchen - {design['name']}"
@@ -225,20 +234,18 @@ Return ONLY valid JSON array, no other text."""
                 custom_design["key_elements"] = [elem.replace("sofa", "island").replace("Platform sofa", "Kitchen island") for elem in design["elements"]]
             elif room_type == "living_room" or room_type == "living room":
                 custom_design["design_name"] = f"Living Room - {design['name']}"
-                custom_design["description"] = f"Design a comfortable {design['style'].lower()} living space for relaxation and entertainment."
+                custom_design["description"] = f"Design a comfortable {design['style'].lower()} living space."
             elif room_type == "office":
                 custom_design["design_name"] = f"Office - {design['name']}"
-                custom_design["description"] = f"Create a productive {design['style'].lower()} workspace that inspires focus."
+                custom_design["description"] = f"Create a productive {design['style'].lower()} workspace."
                 custom_design["key_elements"] = [elem.replace("sofa", "desk").replace("Platform sofa", "Standing desk") for elem in design["elements"]]
 
-            # Adjust for room size
             if room_size == "compact" or room_size == "small":
-                custom_design["key_elements"] = custom_design["key_elements"][:3]  # Fewer elements for small spaces
-                custom_design["description"] += " Optimized for smaller spaces with multi-functional furniture."
+                custom_design["key_elements"] = custom_design["key_elements"][:3]
+                custom_design["description"] += " Optimized for smaller spaces."
             elif room_size == "spacious" or room_size == "large":
                 custom_design["key_elements"].append("Statement pieces")
                 custom_design["key_elements"].append("Area rugs")
-                custom_design["description"] += " Designed to take advantage of the larger space."
 
             customized_designs.append(custom_design)
 
@@ -247,97 +254,7 @@ Return ONLY valid JSON array, no other text."""
     def generate_designs_offline(self, room_analysis: Dict, preferences: Dict = None) -> List[Dict]:
         """Generate designs completely offline without any API calls"""
         print("[INFO] Generating designs in offline mode...")
-
-        room_type = room_analysis.get('room_type', 'room').lower()
-        style_pref = preferences.get('style', 'modern').lower() if preferences else 'modern'
-
-        # Create designs based on room type and style preference
-        designs = []
-
-        # Modern style designs
-        if style_pref in ['modern', 'minimalist', 'contemporary']:
-            if room_type == "living_room" or room_type == "living room":
-                designs = [
-                    {
-                        "design_name": "Modern Living Space",
-                        "style": "Modern",
-                        "description": "Clean, functional living room with contemporary furniture and neutral tones.",
-                        "color_palette": ["#FFFFFF", "#F8F8F8", "#2C2C2C", "#FF6B35"],
-                        "key_elements": ["Sectional sofa", "Coffee table", "Floor lamp", "Abstract art", "Area rug"],
-                        "lighting_plan": "Recessed lighting with floor lamps",
-                        "budget_estimate": "Moderate",
-                        "implementation_steps": ["Clear clutter", "Paint walls white", "Add modern furniture", "Install lighting", "Add textiles"]
-                    },
-                    {
-                        "design_name": "Minimalist Living Room",
-                        "style": "Minimalist",
-                        "description": "Simple, uncluttered space focusing on essential furniture and clean lines.",
-                        "color_palette": ["#FFFFFF", "#E8E8E8", "#333333", "#4A90E2"],
-                        "key_elements": ["Simple sofa", "Side tables", "Table lamp", "Wall shelves", "Potted plants"],
-                        "lighting_plan": "Natural light with minimal artificial lighting",
-                        "budget_estimate": "Budget-friendly",
-                        "implementation_steps": ["Remove unnecessary items", "Choose neutral colors", "Select simple furniture", "Maximize natural light", "Add minimal decor"]
-                    }
-                ]
-            elif room_type == "bedroom":
-                designs = [
-                    {
-                        "design_name": "Modern Bedroom Retreat",
-                        "style": "Modern",
-                        "description": "Peaceful bedroom with clean design and comfortable bedding.",
-                        "color_palette": ["#F5F5F5", "#D4D4D4", "#2C2C2C", "#8E44AD"],
-                        "key_elements": ["Platform bed", "Nightstands", "Table lamps", "Wall art", "Curtains"],
-                        "lighting_plan": "Soft ambient lighting with reading lamps",
-                        "budget_estimate": "Moderate",
-                        "implementation_steps": ["Choose bed frame", "Add bedside tables", "Select comfortable bedding", "Install lighting", "Add window treatments"]
-                    }
-                ]
-            else:
-                # Generic modern design
-                designs = [
-                    {
-                        "design_name": "Modern Space Design",
-                        "style": "Modern",
-                        "description": "Contemporary design with clean lines and functional layout.",
-                        "color_palette": ["#FFFFFF", "#F0F0F0", "#333333", "#E74C3C"],
-                        "key_elements": ["Modern furniture", "Clean lines", "Functional layout", "Quality materials", "Simple decor"],
-                        "lighting_plan": "Layered lighting design",
-                        "budget_estimate": "Moderate",
-                        "implementation_steps": ["Plan layout", "Select furniture", "Choose colors", "Add lighting", "Style with decor"]
-                    }
-                ]
-
-        # Traditional style designs
-        elif style_pref in ['traditional', 'classic', 'rustic']:
-            designs = [
-                {
-                    "design_name": "Classic Traditional Design",
-                    "style": "Traditional",
-                    "description": "Timeless design with classic furniture and warm colors.",
-                    "color_palette": ["#F5F5DC", "#8B7355", "#D2B48C", "#654321"],
-                    "key_elements": ["Wooden furniture", "Classic patterns", "Warm textiles", "Traditional art", "Decorative accessories"],
-                    "lighting_plan": "Warm ambient lighting with chandeliers",
-                    "budget_estimate": "Premium",
-                    "implementation_steps": ["Choose wood tones", "Add classic pieces", "Layer textures", "Install traditional lighting", "Add personal touches"]
-                }
-            ]
-
-        # If no specific matches, use general designs
-        if not designs:
-            designs = [
-                {
-                    "design_name": "Contemporary Style",
-                    "style": "Contemporary",
-                    "description": "Balanced design combining modern and traditional elements.",
-                    "color_palette": ["#FFFFFF", "#E8E8E8", "#4A4A4A", "#FF8C42"],
-                    "key_elements": ["Comfortable seating", "Functional tables", "Good lighting", "Personal decor", "Plants"],
-                    "lighting_plan": "Mixed natural and artificial lighting",
-                    "budget_estimate": "Moderate",
-                    "implementation_steps": ["Assess space", "Choose furniture", "Add lighting", "Style surfaces", "Add finishing touches"]
-                }
-            ]
-
-        return designs
+        return self._get_fallback_designs(room_analysis)
 
     def force_fallback_mode(self) -> List[Dict]:
         """Force fallback mode for testing"""
@@ -348,7 +265,6 @@ Return ONLY valid JSON array, no other text."""
         """Test design generation functionality"""
         print("[TEST] Testing design generation...")
 
-        # Test data
         test_room_analysis = {
             "room_type": "living_room",
             "room_size": "medium",
@@ -356,18 +272,16 @@ Return ONLY valid JSON array, no other text."""
         }
 
         try:
-            # Test Gemini-based generation
-            if self.use_gemini:
-                print("[TEST] Testing Gemini-based generation...")
+            if self.use_openrouter:
+                print("[TEST] Testing OpenRouter-based generation...")
                 designs = self.generate_design_suggestions(test_room_analysis)
                 return {
                     'status': 'success',
-                    'message': f'Generated {len(designs)} designs using Gemini',
+                    'message': f'Generated {len(designs)} designs using OpenRouter',
                     'designs_count': len(designs),
-                    'generation_method': 'gemini'
+                    'generation_method': 'openrouter'
                 }
             else:
-                # Test fallback generation
                 print("[TEST] Testing fallback generation...")
                 designs = self._get_fallback_designs(test_room_analysis)
                 return {
@@ -386,48 +300,32 @@ Return ONLY valid JSON array, no other text."""
 
     def generate_designs_with_images(self, room_analysis: Dict[str, Any],
                                     preferences: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """
-        Generate design suggestions with Gemini-generated images
-
-        Args:
-            room_analysis: Analysis of the room
-            preferences: User preferences for design
-
-        Returns:
-            List of design concepts with generated images
-        """
-        # First generate the design concepts
+        """Generate design suggestions with OpenRouter-generated images"""
         design_concepts = self.generate_design_suggestions(room_analysis, preferences)
 
-        # Get Gemini generator (lazy loading)
-        gemini_gen = _get_gemini_generator()
+        image_gen = _get_image_generator()
 
-        if not GEMINI_AVAILABLE or not gemini_gen:
-            print("⚠️ Gemini image generation not available, returning text-only designs")
-            # Add placeholder images to designs
+        if not OPENROUTER_AVAILABLE or not image_gen:
+            print("Image generation not available, returning text-only designs")
             for concept in design_concepts:
                 concept['image_data'] = self._create_placeholder_image_data(concept)
                 concept['image_status'] = 'placeholder'
             return design_concepts
 
-        # Generate images for each design concept
         enhanced_designs = []
 
-        for i, concept in enumerate(design_concepts[:3]):  # Limit to 3 designs
+        for i, concept in enumerate(design_concepts[:3]):
             try:
-                print(f"🎨 Generating image for design: {concept.get('design_name', f'Design {i+1}')}")
+                print(f"Generating image for design: {concept.get('design_name', f'Design {i+1}')}")
 
-                # Generate image using Gemini
-                image_data = gemini_gen.generate_design_image(room_analysis, concept)
+                image_data = image_gen.generate_design_image(room_analysis, concept)
 
-                # Add image data to the concept
                 concept['image_data'] = image_data
                 concept['image_status'] = 'generated' if image_data else 'fallback'
 
-                # Add metadata about image generation
                 concept['image_metadata'] = {
-                    'generated_at': gemini_gen._get_current_timestamp(),
-                    'generator': 'gemini' if gemini_gen.use_api else 'fallback',
+                    'generated_at': image_gen._get_current_timestamp(),
+                    'generator': 'openrouter' if image_gen.use_api else 'fallback',
                     'room_type': room_analysis.get('room_type', 'unknown'),
                     'design_style': concept.get('style', 'unknown')
                 }
@@ -435,7 +333,7 @@ Return ONLY valid JSON array, no other text."""
                 enhanced_designs.append(concept)
 
             except Exception as e:
-                print(f"❌ Error generating image for {concept.get('design_name', f'Design {i+1}')}: {e}")
+                print(f"Error generating image for {concept.get('design_name', f'Design {i+1}')}: {e}")
                 concept['image_data'] = self._create_placeholder_image_data(concept)
                 concept['image_status'] = 'error'
                 concept['image_error'] = str(e)[:100]
@@ -449,29 +347,22 @@ Return ONLY valid JSON array, no other text."""
             from PIL import Image, ImageDraw
             import io
 
-            # Get colors from design palette
             colors = design_concept.get('color_palette', ['#FFFFFF', '#F5F5F5', '#333333'])
             primary_color = colors[0] if colors else '#FFFFFF'
 
-            # Create image
             img = Image.new('RGB', (800, 600), primary_color)
             draw = ImageDraw.Draw(img)
 
-            # Add design name as text overlay
             design_name = design_concept.get('design_name', 'Design Concept')
             style = design_concept.get('style', 'Style')
 
-            # Try to add text (fallback if fonts not available)
             try:
-                # Draw design name
                 draw.text((400, 250), design_name, fill='black', anchor='mm')
                 draw.text((400, 350), f"Style: {style}", fill='black', anchor='mm')
                 draw.text((400, 450), "Design Preview", fill='black', anchor='mm')
             except:
-                # Simple rectangle if text fails
                 draw.rectangle([300, 200, 500, 400], outline='black', width=2)
 
-            # Convert to base64
             img_buffer = io.BytesIO()
             img.save(img_buffer, format='PNG')
             img_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
@@ -484,39 +375,26 @@ Return ONLY valid JSON array, no other text."""
 
     def generate_single_design_with_image(self, room_analysis: Dict[str, Any],
                                         design_concept: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate a single design concept with image
+        """Generate a single design concept with image"""
+        image_gen = _get_image_generator()
 
-        Args:
-            room_analysis: Analysis of the room
-            design_concept: Specific design concept to visualize
-
-        Returns:
-            Enhanced design concept with generated image
-        """
-        # Get Gemini generator (lazy loading)
-        gemini_gen = _get_gemini_generator()
-
-        if not GEMINI_AVAILABLE or not gemini_gen:
-            print("⚠️ Gemini image generation not available")
+        if not OPENROUTER_AVAILABLE or not image_gen:
+            print("Image generation not available")
             design_concept['image_data'] = self._create_placeholder_image_data(design_concept)
             design_concept['image_status'] = 'placeholder'
             return design_concept
 
         try:
-            print(f"🎨 Generating image for: {design_concept.get('design_name', 'Design')}")
+            print(f"Generating image for: {design_concept.get('design_name', 'Design')}")
 
-            # Generate the image
-            image_data = gemini_gen.generate_design_image(room_analysis, design_concept)
+            image_data = image_gen.generate_design_image(room_analysis, design_concept)
 
-            # Add image data to concept
             design_concept['image_data'] = image_data
             design_concept['image_status'] = 'generated' if image_data else 'fallback'
 
-            # Add metadata
             design_concept['image_metadata'] = {
-                'generated_at': gemini_gen._get_current_timestamp(),
-                'generator': 'gemini' if gemini_gen.use_api else 'fallback',
+                'generated_at': image_gen._get_current_timestamp(),
+                'generator': 'openrouter' if image_gen.use_api else 'fallback',
                 'room_type': room_analysis.get('room_type', 'unknown'),
                 'design_style': design_concept.get('style', 'unknown')
             }
@@ -524,38 +402,38 @@ Return ONLY valid JSON array, no other text."""
             return design_concept
 
         except Exception as e:
-            print(f"❌ Error in single design generation: {e}")
+            print(f"Error in single design generation: {e}")
             design_concept['image_data'] = self._create_placeholder_image_data(design_concept)
             design_concept['image_status'] = 'error'
             design_concept['image_error'] = str(e)[:100]
             return design_concept
 
     def get_available_templates(self) -> List[Dict]:
-        """Get available fallback templates from Gemini generator"""
-        gemini_gen = _get_gemini_generator()
-        if GEMINI_AVAILABLE and gemini_gen:
-            return gemini_gen.get_fallback_templates()
+        """Get available fallback templates from image generator"""
+        image_gen = _get_image_generator()
+        if OPENROUTER_AVAILABLE and image_gen:
+            return image_gen.get_fallback_templates()
         return []
 
     def cleanup_resources(self):
         """Clean up old templates and resources"""
-        gemini_gen = _get_gemini_generator()
-        if GEMINI_AVAILABLE and gemini_gen:
-            removed_count = gemini_gen.cleanup_old_templates()
+        image_gen = _get_image_generator()
+        if OPENROUTER_AVAILABLE and image_gen:
+            removed_count = image_gen.cleanup_old_templates()
             return removed_count
         return 0
 
     def get_image_generation_info(self) -> Dict:
         """Get information about image generation status and model"""
-        gemini_gen = _get_gemini_generator()
-        if GEMINI_AVAILABLE and gemini_gen:
-            model_info = gemini_gen.get_current_model_info()
+        image_gen = _get_image_generator()
+        if OPENROUTER_AVAILABLE and image_gen:
+            model_info = image_gen.get_current_model_info()
             return {
                 'image_generation_available': model_info['model_available'],
                 'current_model': model_info['model_name'],
                 'generation_method': model_info['generation_method'],
                 'api_status': model_info['api_status'],
-                'design_generation_method': 'gemini' if self.use_gemini else 'offline'
+                'design_generation_method': 'openrouter' if self.use_openrouter else 'offline'
             }
         else:
             return {
@@ -569,35 +447,31 @@ Return ONLY valid JSON array, no other text."""
 # Create singleton
 design_generator = DesignGenerator()
 
-# Add a method to check current model status
 def check_current_model_status():
     """Check and display current model status for both text and image generation"""
     print("\n" + "="*60)
-    print("🤖 CURRENT MODEL STATUS")
+    print("CURRENT MODEL STATUS")
     print("="*60)
 
-    # Check design generation status
-    if design_generator.use_gemini and design_generator.gemini_model:
-        print("✅ Design Generation: Gemini API (Text)")
-        print(f"   Model: {getattr(design_generator.gemini_model, 'model_name', 'Unknown')}")
+    if design_generator.use_openrouter and design_generator.client:
+        print("Design Generation: OpenRouter API")
+        print(f"   Model: {design_generator.model}")
         print("   Status: Working")
     else:
-        print("⚠️ Design Generation: Offline Fallback Mode")
+        print("Design Generation: Offline Fallback Mode")
         print("   Status: Using context-aware fallback designs")
 
-    # Check image generation status
     image_info = design_generator.get_image_generation_info()
     if image_info['image_generation_available']:
-        print("✅ Image Generation: Gemini API")
+        print("Image Generation: OpenRouter API")
         print(f"   Model: {image_info['current_model']}")
         print(f"   Status: {image_info['api_status']}")
     else:
-        print("⚠️ Image Generation: Offline Fallback Mode")
+        print("Image Generation: Offline Fallback Mode")
         print("   Status: Using enhanced placeholder images")
 
     print("="*60)
     return image_info
 
 if __name__ == "__main__":
-    # When run directly, show model status
     check_current_model_status()

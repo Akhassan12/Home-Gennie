@@ -337,6 +337,32 @@ async function resendResetOTP() {
     }
 }
 
+// Toggle password visibility
+function togglePasswordVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    const btn = document.querySelector(`[data-field="${inputId}"]`);
+    const eyeOpen = btn.querySelector('.eye-open');
+    const eyeClosed = btn.querySelector('.eye-closed');
+    
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    
+    // Toggle eye icons with animation
+    if (isPassword) {
+        // Show open eye when revealing password
+        eyeClosed.style.display = 'none';
+        eyeOpen.style.display = 'block';
+        eyeOpen.classList.add('eye-animate-open');
+        eyeClosed.classList.remove('eye-animate-close');
+    } else {
+        // Show closed eye when hiding password
+        eyeOpen.style.display = 'none';
+        eyeClosed.style.display = 'block';
+        eyeClosed.classList.add('eye-animate-close');
+        eyeOpen.classList.remove('eye-animate-open');
+    }
+}
+
 // Export functions
 window.showResetPasswordForm = showResetPasswordForm;
-window.showResetPasswordForm = showResetPasswordForm;
+window.togglePasswordVisibility = togglePasswordVisibility;

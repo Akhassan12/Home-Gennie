@@ -313,8 +313,11 @@ def init_ar_database(app):
     db.init_app(app)
 
     with app.app_context():
-        db.create_all()
-        print("AR Database tables created successfully")
+        try:
+            db.create_all()
+            print("AR Database tables created successfully")
+        except Exception as e:
+            print(f"⚠️ AR Database warning: {e}")
 
 
 def seed_model_library():

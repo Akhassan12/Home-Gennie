@@ -17,12 +17,8 @@
             <aside class="sidebar">
                 <h2>AR Interior</h2>
                 <nav>
-                    <a class="active" onclick="showTab('dashboard')">📊 Dashboard</a>
-                    <a onclick="showTab('projects')">🏠 Projects</a>
-                    <a onclick="showTab('design')">🎨 AI Design</a>
+                    <a class="active" onclick="showTab('design')">🎨 AI Design</a>
                     <a onclick="showTab('ar')">🪑 AR Preview</a>
-                    <a onclick="showTab('wishlist')">⭐ Wishlist</a>
-                    <a onclick="showTab('budget')">💰 Budget</a>
                     <a onclick="showTab('feedback')">📝 Feedback</a>
                     <a onclick="showTab('settings')">⚙️ Settings</a>
                 </nav>
@@ -45,10 +41,10 @@
                 </div>
                 <div class="content">
                     <!-- Dashboard Tab -->
-                    <div id="dashboard" class="tab active">
+                    <div id="dashboard" >
                         <div class="box">
                             <h3>Welcome</h3>
-                            <p>Manage projects, preview AR furniture, plan budgets & save favorites!</p>
+                            <p></p>
                         </div>
                     </div>
 
@@ -119,29 +115,8 @@
                         </div>
                     </div>
 
-                    <!-- Projects Tab -->
-                    <div id="projects" class="tab">
-                        <div class="box">
-                            <h3>Add Project</h3>
-                            <input type="text" id="projName" placeholder="Project Name" />
-                            <input type="text" id="projClient" placeholder="Client Name" />
-                            <input type="date" id="projDate" />
-                            <select id="projStatus">
-                                <option>In Progress</option>
-                                <option>Completed</option>
-                                <option>Pending</option>
-                            </select>
-                            <button onclick="addProject()">Add</button>
-                        </div>
-                        <div class="box">
-                            <h3>Projects</h3>
-                            <input type="text" id="projSearch" placeholder="Search..." onkeyup="searchProjects()" />
-                            <div id="projList"></div>
-                        </div>
-                    </div>
-
                     <!-- Design Tab -->
-                    <div id="design" class="tab">
+                    <div id="design" class="tab active">
                         <div class="box">
                             <h3>AI-Powered Interior Design</h3>
                             <p>Upload a photo of your room and get AI-generated design suggestions!</p>
@@ -264,33 +239,6 @@
                                     📦 Refresh Models
                                 </button>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Wishlist Tab -->
-                    <div id="wishlist" class="tab">
-                        <div class="box">
-                            <h3>Favorites</h3>
-                            <div id="wishlistItems">
-                                <p>No favorites yet.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Budget Tab -->
-                    <div id="budget" class="tab">
-                        <div class="box">
-                            <h3>Add Budget</h3>
-                            <input type="text" id="budgetProj" placeholder="Project" />
-                            <input type="number" id="budgetAmt" placeholder="Amount" />
-                            <button onclick="addBudget()">Add</button>
-                        </div>
-                        <div class="box">
-                            <h3>Budgets</h3>
-                            <div id="budgetList"></div>
-                            <p><b>Total:</b> $<span id="totalBudget">0</span></p>
-                            <p><b>Average:</b> $<span id="avgBudget">0</span></p>
-                            <p><b>Highest:</b> $<span id="maxBudget">0</span></p>
                         </div>
                     </div>
 
