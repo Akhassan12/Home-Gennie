@@ -649,31 +649,51 @@
                 const card = document.createElement('div');
                 card.className = 'design-card';
 
-                const colorsHTML = design.color_palette ? `
+                const escapeHtml = (str) => {
+                    if (str === null || str === undefined) {
+                        return '';
+                    }
+                    return String(str)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                };
+
+                const colorsHTML = Array.isArray(design.color_palette) && design.color_palette.length ? `
                     <div style="display: flex; gap: 8px; margin: 15px 0;">
-                        ${design.color_palette.map(color =>
-                            `<div style="width: 30px; height: 30px; background-color: ${color}; border-radius: 6px; border: 2px solid #e9ecef;"></div>`
-                        ).join('')}
+                        ${design.color_palette.map(color => {
+                            const safeColor = escapeHtml(color);
+                            return `<div style="width: 30px; height: 30px; background-color: ${safeColor}; border-radius: 6px; border: 2px solid #e9ecef;"></div>`;
+                        }).join('')}
                     </div>` : '';
 
-                const elementsHTML = design.key_elements ? `
+                const elementsHTML = Array.isArray(design.key_elements) && design.key_elements.length ? `
                     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px;">
-                        ${design.key_elements.map(element =>
-                            `<span style="background: #f8f9fa; color: #495057; padding: 4px 10px; border-radius: 12px; font-size: 11px; border: 1px solid #e9ecef;">${element}</span>`
-                        ).join('')}
+                        ${design.key_elements.map(element => {
+                            const safeElement = escapeHtml(element);
+                            return `<span style="background: #f8f9fa; color: #495057; padding: 4px 10px; border-radius: 12px; font-size: 11px; border: 1px solid #e9ecef;">${safeElement}</span>`;
+                        }).join('')}
                     </div>` : '';
+
+                const safeImageUrl = escapeHtml(design.image_url);
+                const safeDesignName = escapeHtml(design.design_name);
+                const safeStyle = escapeHtml(design.style);
+                const safeBudget = escapeHtml(design.budget_estimate);
+                const safeDescription = escapeHtml(design.description);
 
                 card.innerHTML = `
                     <div class="design-card-image">
-                        <img src="${design.image_url}" alt="${design.design_name}">
+                        <img src="${safeImageUrl}" alt="${safeDesignName}">
                     </div>
                     <div class="design-card-content">
-                        <h3 style="margin-bottom: 8px; color: #2c3e50; font-size: 18px;">${design.design_name}</h3>
+                        <h3 style="margin-bottom: 8px; color: #2c3e50; font-size: 18px;">${safeDesignName}</h3>
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-                            <span style="color: #e67e22; font-weight: 600; text-transform: capitalize;">${design.style}</span>
-                            <span style="background: #ffc107; color: #212529; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">${design.budget_estimate}</span>
+                            <span style="color: #e67e22; font-weight: 600; text-transform: capitalize;">${safeStyle}</span>
+                            <span style="background: #ffc107; color: #212529; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">${safeBudget}</span>
                         </div>
-                        <p style="color: #6c757d; margin-bottom: 15px; line-height: 1.6;">${design.description}</p>
+                        <p style="color: #6c757d; margin-bottom: 15px; line-height: 1.6;">${safeDescription}</p>
                         ${colorsHTML}
                         ${elementsHTML}
                         <a href="/ar-view" class="btn btn-primary" style="width: 100%; margin-top: 10px; display: block; text-align: center; text-decoration: none;">
