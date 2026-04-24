@@ -1,0 +1,54 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment files — NEVER commit secrets to git
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Python files
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Agent/Local State directories
+.gemini/
+.gsd/
+.stitch/
+.agent/
+adapters/
+docs/
+GSD-STYLE.md
+model_capabilities.yaml
+KNOWLEDGE.txt
+PROJECT_RULES.md
+ARCHITECTURE.md
+.DS_Store
