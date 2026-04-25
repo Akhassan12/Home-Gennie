@@ -150,18 +150,9 @@ ai-interior-design/
 │   └── .env.example                 # Template for secrets
 │
 ├── 📁 public/                       # Static assets served by Vite
-├── 📁 docs/                         # Project documentation
-│   ├── runbook.md                   # Ops runbook
-│   ├── model-selection-playbook.md  # AI model selection guidance
-│   └── token-optimization-guide.md  # Context/token efficiency guide
-│
-├── 📁 adapters/                     # Model-specific agent adapter hints
 ├── 📁 scripts/                      # Utility scripts
 ├── supabase_setup.sql               # Full Supabase schema (tables, RLS, triggers)
 ├── migrate_buckets.py               # One-time migration script for storage buckets
-├── model_capabilities.yaml          # GSD model capability registry
-├── PROJECT_RULES.md                 # GSD canonical development rules
-├── GSD-STYLE.md                     # Code style & conventions guide
 ├── .env.local                       # Frontend secrets (Supabase URL + anon key)
 ├── .env.example                     # Frontend env template
 ├── package.json                     # Frontend dependencies + scripts
@@ -445,8 +436,8 @@ USE_FREE_MODE=false           # Set true to skip paid providers
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/ai-interior-design.git
-cd ai-interior-design
+git clone https://github.com/Akhassan12/Home-Gennie.git
+cd Home-Gennie
 ```
 
 ### 2. Install frontend dependencies
