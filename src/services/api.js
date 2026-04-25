@@ -100,9 +100,9 @@ export async function generate3DModel(imageUrl, userId = '') {
  * @param {string} userId   — Supabase user ID (for storage path)
  * @returns {{ success: boolean, glbUrl: string }}
  */
-export async function generate3DRoom(imageUrl, userId = '') {
+export async function generate3DRoom(imageUrl, userId = '', designId = '') {
   return apiFetch('/generate-3d-room', {
     method: 'POST',
-    body: JSON.stringify({ imageUrl, userId }),
+    body: JSON.stringify({ imageUrl, userId, designId }),
   })
 }

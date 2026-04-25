@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
-import { AuthProvider } from './services/auth'
-import { useAuth } from './services/auth'
+import { AuthProvider, useAuth } from './services/auth'
 import { useState, useEffect, createContext, useContext } from 'react'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'

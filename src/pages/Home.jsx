@@ -568,10 +568,10 @@ export default function Home() {
               {[...Array(5)].map((_, i) => <Star key={i} size={16} fill={C.gold} color={C.gold} />)}
             </div>
             <blockquote style={{ fontFamily: 'Cinzel, serif', fontStyle: 'italic', fontWeight: 400, fontSize: 'clamp(1.2rem, 2.5vw, 1.75rem)', color: C.stone900, maxWidth: 640, margin: '0 auto', lineHeight: 1.55, letterSpacing: '0.01em' }}>
-              "It preserved every wall and window in my room, then transformed it into a Japandi sanctuary."
+              "It preserved every wall and window in my room, then transformed it into a masterpiece."
             </blockquote>
             <p style={{ fontFamily: 'Josefin Sans', fontSize: '0.75rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: C.stone500, marginTop: 18 }}>
-              — Ayesha R., Lahore — Home Gennie User
+              — Ali Hassan K., <span style={{ color: C.gold }}>Mumbai</span> — Home Gennie User
             </p>
           </motion.div>
         </div>

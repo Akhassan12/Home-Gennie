@@ -46,6 +46,7 @@ function mapDesign(d) {
     room: d.room_type,
     img: displayImg,
     originalImg: d.original_image_url,
+    glbUrl: d.glb_url || null,   // ← 3D model URL (if already generated)
     status,
     createdAt: d.created_at,
   }
@@ -63,11 +64,24 @@ export default function Gallery() {
   const fetchDesigns = useCallback(async () => {
     if (!user) { setDesigns(DEMO_ITEMS); setLoading(false); return }
     try {
-      const { data, error } = await supabase
+      // Try fetching with glb_url (exists after the DB migration is run)
+      let { data, error } = await supabase
         .from('designs')
-        .select('id, original_image_url, generated_image_url, room_type, style, created_at')
+        .select('id, original_image_url, generated_image_url, room_type, style, created_at, glb_url')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+
+      // If the glb_url column does not exist yet, fall back to query without it
+      if (error && error.message?.includes('glb_url')) {
+        console.warn('[Gallery] glb_url column not found, retrying without it.')
+        const fallback = await supabase
+          .from('designs')
+          .select('id, original_image_url, generated_image_url, room_type, style, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+        data = fallback.data
+        error = fallback.error
+      }
 
       if (error) throw error
 
@@ -218,7 +232,18 @@ export default function Gallery() {
                 onHoverEnd={() => setHovered(null)}
                 onClick={() => {
                   if (d.status === 'done') {
-                    navigate(`/viewer?imageUrl=${encodeURIComponent(d.img)}&style=${encodeURIComponent(d.style)}&autoGenerate=true`)
+                    // If this design already has a saved 3D model, pass it directly — no re-generation needed
+                    const params = new URLSearchParams({
+                      imageUrl: d.img,
+                      style: d.style,
+                      designId: d.id,   // ← so backend can save glb_url back to this row
+                    })
+                    if (d.glbUrl) {
+                      params.set('glbUrl', d.glbUrl)   // ← load saved model instantly
+                    } else {
+                      params.set('autoGenerate', 'true') // ← no model yet, trigger generation
+                    }
+                    navigate(`/viewer?${params.toString()}`)
                   }
                 }}
                 style={{

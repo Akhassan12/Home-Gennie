@@ -28,7 +28,7 @@ const DEMO_RECENT = [
 
 // Real-Time Trending Designs
 const TRENDING_DESIGNS = [
-  { id: 't1', title: 'Japandi Fusion', style: 'Serene · Minimal', img: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?q=80&w=600' },
+  { id: 't1', title: 'Zen Garden Oasis', style: 'Serene · Minimal', img: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?q=80&w=600' },
   { id: 't2', title: 'Biophilic Oasis', style: 'Nature · Greenery', img: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?q=80&w=600' },
   { id: 't3', title: 'Industrial Chic', style: 'Urban · Exposed', img: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?q=80&w=600' },
 ]
@@ -39,7 +39,7 @@ export default function Dashboard() {
   const navigate           = useNavigate()
   const dropdownRef        = useRef(null)
 
-  const [stats, setStats]         = useState({ total: 0, ai: 0, week: 0 })
+  const [stats, setStats]         = useState({ total: 0, uniqueStyles: 0, week: 0, uniqueRooms: 0 })
   const [recentDesigns, setRecent]= useState([])
   const [dropdownOpen, setDropdown] = useState(false)
 
@@ -54,32 +54,46 @@ export default function Dashboard() {
   // ── Fetch data scoped to the current user ──────────────────
   useEffect(() => {
     // Reset state immediately so stale data from a previous user never shows
-    setStats({ total: 0, ai: 0, week: 0 })
+    setStats({ total: 0, uniqueStyles: 0, week: 0, uniqueRooms: 0 })
     setRecent([])
 
     if (!user?.id) return
 
     const fetchData = async () => {
-      const { data, error } = await supabase
+      // 1. Fetch lightweight stats data (no limit) to get accurate total numbers
+      const { data: statsData } = await supabase
+        .from('designs')
+        .select('created_at, room_type, style')
+        .eq('user_id', user.id)
+
+      // 2. Fetch only the most recent 3 designs for the preview cards
+      const { data: recentData, error } = await supabase
         .from('designs')
         .select('id, created_at, room_type, style, original_image_url, generated_image_url')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(3)
 
       if (error) {
         console.warn('[Dashboard] designs fetch error:', error.message)
         return
       }
 
-      if (data) {
+      if (statsData) {
         const weekAgo = new Date(Date.now() - 7 * 86400000)
+        const uniqueRooms = new Set(statsData.map(d => d.room_type).filter(Boolean)).size
+        const uniqueStyles = new Set(statsData.map(d => d.style).filter(Boolean)).size
+
         setStats({
-          total: data.length,
-          ai:    data.length,
-          week:  data.filter(d => new Date(d.created_at) > weekAgo).length,
+          total: statsData.length,
+          uniqueStyles: uniqueStyles,
+          week: statsData.filter(d => new Date(d.created_at) > weekAgo).length,
+          uniqueRooms: uniqueRooms,
         })
-        setRecent(data.slice(0, 3))
+      }
+      
+      if (recentData) {
+        setRecent(recentData)
       }
     }
 
@@ -105,10 +119,10 @@ export default function Dashboard() {
   }
 
   const STAT_CARDS = [
-    { label: 'Total Designs', value: stats.total },
-    { label: 'AI Generated',  value: stats.ai    },
-    { label: 'This Week',     value: stats.week  },
-    { label: 'Rooms Done',    value: stats.total },
+    { label: 'Total Designs',   value: stats.total },
+    { label: 'Styles Explored', value: stats.uniqueStyles },
+    { label: 'This Week',       value: stats.week  },
+    { label: 'Unique Rooms',    value: stats.uniqueRooms },
   ]
 
   // Use real designs if available, otherwise fall back to demo

@@ -4,7 +4,6 @@ import shutil
 import base64
 import tempfile
 import requests
-import asyncio
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -357,7 +356,7 @@ def _upload_glb_to_supabase(glb_path: str, user_id: str, auth_header: str, stora
             files = {"file": (file_name, f, "application/octet-stream")}
             res = requests.post(
                 f"{supabase_url}/storage/v1/object/models/{file_name}",
-                headers=upload_headers, files=files, timeout=60
+                headers=upload_headers, files=files, timeout=300
             )
         if res.status_code in (200, 201):
             public_url = f"{supabase_url}/storage/v1/object/public/models/{file_name}"
@@ -629,7 +628,7 @@ async def generate_3d_model(req: Generate3DRequest, request: Request):
                                 f"{supabase_url}/storage/v1/object/models/{file_name}",
                                 headers=upload_headers,
                                 files={"file": (file_name, glb_bytes, "application/octet-stream")},
-                                timeout=120
+                                timeout=300
                             )
                             if up_res.status_code in (200, 201):
                                 public_url = f"{supabase_url}/storage/v1/object/public/models/{file_name}"
@@ -669,6 +668,7 @@ async def generate_3d_model(req: Generate3DRequest, request: Request):
 class Generate3DRoomRequest(BaseModel):
     imageUrl: str
     userId: str = ""
+    designId: str = ""  # optional — when set, glb_url is saved to the designs table
 
 
 @app.post("/generate-3d-room")
@@ -732,10 +732,31 @@ async def generate_3d_room(req: Generate3DRoomRequest, request: Request):
     )
 
     if result:
-        # Supabase upload succeeded — clean up temp file and return permanent URL
+        # Supabase upload succeeded — persist the URL in the designs table
         try: os.unlink(glb_path)
         except OSError: pass
-        print(f"DEBUG: Room 3D pipeline complete. GLB URL: {result['glbUrl']}")
+        public_glb_url = result['glbUrl']
+        print(f"DEBUG: Room 3D pipeline complete. GLB URL: {public_glb_url}")
+        # Save glb_url back to the designs row so Gallery can load it directly next time
+        if req.designId and supabase_url and supabase_key:
+            try:
+                patch_headers = {
+                    "apikey": supabase_key,
+                    "Authorization": auth_header,
+                    "Content-Type": "application/json",
+                }
+                patch_res = requests.patch(
+                    f"{supabase_url}/rest/v1/designs?id=eq.{req.designId}",
+                    headers=patch_headers,
+                    json={"glb_url": public_glb_url},
+                    timeout=10,
+                )
+                if patch_res.status_code in (200, 204):
+                    print(f"DEBUG: glb_url saved to designs table for design {req.designId}")
+                else:
+                    print(f"WARNING: Could not save glb_url to DB [{patch_res.status_code}]: {patch_res.text[:200]}")
+            except Exception as db_err:
+                print(f"WARNING: DB glb_url update failed: {db_err}")
         return result
 
     # ── Supabase upload failed → local static fallback ────────────────

@@ -52,3 +52,6 @@ KNOWLEDGE.txt
 PROJECT_RULES.md
 ARCHITECTURE.md
 .DS_Store
+
+# Local GLB model files generated at runtime (can be large, should not be in git)
+backend/static/models/

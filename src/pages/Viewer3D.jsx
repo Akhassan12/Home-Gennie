@@ -37,10 +37,12 @@ export default function Viewer3D() {
   const imageUrl = rawImageUrl ? decodeURIComponent(rawImageUrl) : null
   const initialStyle = searchParams.get('style') || 'Modern'
   const directGlbUrl = searchParams.get('glbUrl')
+  const designId = searchParams.get('designId') || ''  // for saving glb_url back to DB
 
   const [style, setStyle] = useState(initialStyle)
   const [config, setConfig] = useState({ exposure: 1.2, ambientIntensity: 0.4, dirIntensity: 1.5, pointIntensity: 0.6 })
   const [isGenerating3D, setIsGenerating3D] = useState(false)
+  // Initialize from URL param so Gallery can pass a pre-generated model directly
   const [glbUrl, setGlbUrl] = useState(directGlbUrl ? decodeURIComponent(directGlbUrl) : null)
   const [generationError, setGenerationError] = useState(null)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -76,11 +78,28 @@ export default function Viewer3D() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Auto-generate 3D model if flag is present
+  // ── Reset viewer state whenever the user switches to a different design ──
+  // Without this, clicking a different image from Gallery keeps the old model loaded.
+  useEffect(() => {
+    const newGlbFromUrl = searchParams.get('glbUrl')
+    if (newGlbFromUrl) {
+      // Gallery passed a pre-existing 3D model — load it directly, no generation needed
+      setGlbUrl(decodeURIComponent(newGlbFromUrl))
+      setGenerationError(null)
+      setIsGenerating3D(false)
+    } else {
+      // New image with no model yet — clear the old model so it doesn't show
+      setGlbUrl(null)
+      setGenerationError(null)
+    }
+  }, [imageUrl])  // ← runs every time the image changes
+
+  // Auto-generate 3D model if flag is present (only when no glbUrl already in URL)
   useEffect(() => {
     const autoGen = searchParams.get('autoGenerate') === 'true'
-    // If autoGenerate is true, and we have an image, and it's not currently generating or complete
-    if (autoGen && imageUrl) {
+    const hasGlb   = !!searchParams.get('glbUrl')
+    // Only auto-generate when explicitly requested and no model URL is already provided
+    if (autoGen && imageUrl && !hasGlb) {
       setIsGenerating3D(true)
       // Small timeout to allow state to settle
       setTimeout(() => {
@@ -101,27 +120,33 @@ export default function Viewer3D() {
   // ── GLB Cache (localStorage) ────────────────────────────────────
   // Stores imageUrl → glbUrl so re-visiting the same design never
   // re-generates (no API call, no cost, instant load).
-  const GLB_CACHE_PREFIX = 'hg_glb_v1_'
+  //
+  // KEY FIX: All Supabase URLs share a long common prefix like:
+  //   https://xxx.supabase.co/storage/v1/object/public/designs/USER_ID/...
+  // Slicing the FIRST 48 base64 chars made every URL hash to the same key!
+  // We now take the LAST 60 chars of the base64 where the unique
+  // timestamp/filename lives, guaranteeing a unique key per image.
+  const GLB_CACHE_PREFIX = 'hg_glb_v3_'  // bumped to flush all stale/corrupted entries
+
+  const _cacheKey = (url) => {
+    const b64 = btoa(unescape(encodeURIComponent(url))).replace(/[^a-z0-9]/gi, '')
+    // Take the LAST 60 chars — this is where the unique part of the URL lives
+    return GLB_CACHE_PREFIX + b64.slice(-60)
+  }
 
   const getCachedGlb = (url) => {
-    try {
-      const key = GLB_CACHE_PREFIX + btoa(url).replace(/[^a-z0-9]/gi, '').slice(0, 48)
-      return localStorage.getItem(key) || null
-    } catch { return null }
+    try   { return localStorage.getItem(_cacheKey(url)) || null }
+    catch { return null }
   }
 
   const setCachedGlb = (url, glbUrl) => {
-    try {
-      const key = GLB_CACHE_PREFIX + btoa(url).replace(/[^a-z0-9]/gi, '').slice(0, 48)
-      localStorage.setItem(key, glbUrl)
-    } catch {}
+    try   { localStorage.setItem(_cacheKey(url), glbUrl) }
+    catch {}
   }
 
   const clearCachedGlb = (url) => {
-    try {
-      const key = GLB_CACHE_PREFIX + btoa(url).replace(/[^a-z0-9]/gi, '').slice(0, 48)
-      localStorage.removeItem(key)
-    } catch {}
+    try   { localStorage.removeItem(_cacheKey(url)) }
+    catch {}
   }
 
   // Auto-load from cache whenever imageUrl changes (e.g. navigating back)
@@ -162,7 +187,7 @@ export default function Viewer3D() {
     setGenerationError(null)
     setGlbUrl(null)
     try {
-      const data = await apiGenerate3DRoom(imageUrl, user?.id || '')
+      const data = await apiGenerate3DRoom(imageUrl, user?.id || '', designId)
       if (data.success && data.glbUrl) {
         setGlbUrl(data.glbUrl)
         setCachedGlb(imageUrl, data.glbUrl)  // Save for next visit
@@ -369,7 +394,7 @@ export default function Viewer3D() {
               border: isFullscreen ? 'none' : '1px solid rgba(255,255,255,0.05)',
               transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
             }}>
-              {imageUrl 
+              {(imageUrl || glbUrl) 
                 ? <True3DViewer glbUrl={glbUrl} isGenerating={isGenerating3D} onGenerate={handleGenerate3D} transform={modelTransform} />
                 : <ThreeViewer style={style} config={config} />
               }

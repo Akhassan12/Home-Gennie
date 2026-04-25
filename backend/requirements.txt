@@ -2,7 +2,6 @@ fastapi>=0.115.0
 uvicorn>=0.34.0
 pydantic>=2.0.0
 replicate>=1.0.4
-supabase==2.28.0
 python-dotenv>=1.0.0
 requests>=2.33.0
 gradio_client>=2.3.0
