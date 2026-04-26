@@ -19,6 +19,11 @@ app = FastAPI(title="Home Gennie API")
 # ── Local static file server for GLB fallback ─────────────────────
 # When Supabase upload fails, GLB files are served from here instead.
 # Accessible at: http://localhost:8000/static/models/<filename>.glb
+# On HuggingFace Spaces, SPACE_HOST is set automatically.
+BACKEND_BASE_URL = os.environ.get("SPACE_HOST", "http://localhost:8000")
+if BACKEND_BASE_URL and not BACKEND_BASE_URL.startswith("http"):
+    BACKEND_BASE_URL = f"https://{BACKEND_BASE_URL}"
+
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_MODELS_DIR = os.path.join(_BACKEND_DIR, "static", "models")
 os.makedirs(STATIC_MODELS_DIR, exist_ok=True)
@@ -771,7 +776,7 @@ async def generate_3d_room(req: Generate3DRoomRequest, request: Request):
 
         # Build the localhost URL — works as long as backend is running
         # (which it always is during development / on-device use)
-        local_url = f"http://localhost:8000/static/models/{filename}"
+        local_url = f"{BACKEND_BASE_URL}/static/models/{filename}"
         print(f"DEBUG: GLB served locally at {local_url}")
         return {"success": True, "glbUrl": local_url, "source": "local"}
     except Exception as fallback_err:
