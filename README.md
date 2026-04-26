@@ -566,4 +566,3 @@ The app uses a warm, earthy premium design language:
 
 ---
 
-*Built with the GSD (Get Shit Done) methodology — spec-driven, empirically verified, zero-waste development.*
