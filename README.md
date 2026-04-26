@@ -1,6 +1,8 @@
 # 🏠 Home Gennie — AI Interior Design Platform
 
 > **Transform any room into an architectural masterpiece using multi-layer AI generation, real-time 3D reconstruction, and cross-platform AR visualization.**
+>
+> **Frontend:** Deployed on Vercel · **Backend:** Deployed on HuggingFace Spaces (Docker)
 
 ---
 
@@ -76,7 +78,7 @@ The platform was built to be:
 ### Backend
 | Technology | Version | Purpose |
 |---|---|---|
-| Python | 3.10+ | Runtime |
+| Python | 3.11 | Runtime (Docker: `python:3.11-slim`) |
 | FastAPI | ^0.115.0 | Async REST API framework |
 | Uvicorn | ^0.34.0 | ASGI server |
 | Pydantic | ^2.0.0 | Request/response model validation |
@@ -84,16 +86,19 @@ The platform was built to be:
 | `gradio_client` | ^2.3.0 | HuggingFace Space client (ControlNet) |
 | `controlnet_aux` | ^0.0.7 | Local MLSD line detector (CPU) |
 | `transformers` | ^4.40.0 | HF DPT depth estimator (CPU fallback) |
-| Pillow | ^10.0.0 | Image processing |
+| `trimesh` | ^4.0.0 | 3D mesh creation + GLB export |
+| Pillow | ^12.2.0 | Image processing |
 | `python-dotenv` | ^1.0.0 | `.env` loading |
-| `requests` | ^2.31.0 | HTTP calls to Supabase REST + AI APIs |
+| `requests` | ^2.33.0 | HTTP calls to Supabase REST + AI APIs |
+| Docker | - | Container for HuggingFace Spaces deployment |
 
 ### Infrastructure & BaaS
 | Service | Role |
 |---|---|
-| **Supabase** | PostgreSQL database, Auth (email + Google OAuth), Storage (two buckets) |
-| **Supabase Storage** | `uploads` bucket (raw photos), `designs` bucket (generated images + 3D models) |
-| **HuggingFace** | ControlNet inference (GPU Space), Depth API, Pix2Pix model, local model cache |
+| **Supabase** | PostgreSQL database, Auth (email + Google OAuth), Storage (three buckets) |
+| **Supabase Storage** | `uploads` bucket (raw photos), `designs` bucket (AI images), `models` bucket (GLB 3D files) |
+| **HuggingFace Spaces** | Backend hosting (Docker, 16GB RAM), ControlNet GPU inference, Depth API, Pix2Pix |
+| **Vercel** | Frontend hosting (React SPA) |
 | **Replicate** | SDXL image generation, Trellis image-to-3D |
 | **AI Horde** | Free anonymous fallback for image generation |
 | **Google model-viewer** | CDN web component for 3D/AR rendering |
@@ -125,11 +130,9 @@ ai-interior-design/
 │   │   ├── Navbar.jsx               # Global top navigation bar
 │   │   ├── Footer.jsx               # Global footer
 │   │   ├── ProtectedRoute.jsx       # Auth guard wrapper
-│   │   ├── PageTransition.jsx       # Framer Motion page wrapper
 │   │   ├── ImageUploader.jsx        # Drag-and-drop file input
 │   │   ├── ThreeViewer.jsx          # Three.js style preview (no image needed)
 │   │   ├── True3DViewer.jsx         # GLB model viewer (after 3D generation)
-│   │   ├── ARViewer.jsx             # <model-viewer> AR component + QR code
 │   │   ├── DesignCard.jsx           # Gallery card with hover effects
 │   │   ├── DesignDetailModal.jsx    # Fullscreen design detail modal
 │   │   ├── ComparisonSlider.jsx     # Before/after image comparison slider
@@ -138,24 +141,25 @@ ai-interior-design/
 │   └── 📁 services/                 # Service layer (API abstraction)
 │       ├── supabase.js              # Supabase client singleton
 │       ├── auth.jsx                 # AuthContext + useAuth hook
-│       ├── api.js                   # FastAPI backend calls (generate, 3D)
-│       ├── aiService.js             # Frontend AI utility helpers
-│       └── mockAI.js                # Mock/demo AI responses for testing
+│       └── api.js                   # FastAPI backend calls (generate, 3D)
 │
 ├── 📁 backend/                      # Python FastAPI backend
-│   ├── main.py                      # API server: /generate, /generate-3d
+│   ├── main.py                      # API server: /generate, /generate-3d, /generate-3d-room
 │   ├── controlnet_pipeline.py       # ControlNet MLSD + Depth pipeline
+│   ├── depth_room_pipeline.py       # Full-room 3D reconstruction pipeline
+│   ├── Dockerfile                   # Docker config for HuggingFace Spaces
 │   ├── requirements.txt             # Python dependencies
+│   ├── static/models/               # Local GLB fallback serving directory
 │   ├── .env                         # Backend secrets (NOT committed)
 │   └── .env.example                 # Template for secrets
 │
 ├── 📁 public/                       # Static assets served by Vite
 ├── 📁 scripts/                      # Utility scripts
 ├── supabase_setup.sql               # Full Supabase schema (tables, RLS, triggers)
-├── migrate_buckets.py               # One-time migration script for storage buckets
 ├── .env.local                       # Frontend secrets (Supabase URL + anon key)
 ├── .env.example                     # Frontend env template
 ├── package.json                     # Frontend dependencies + scripts
+├── package-lock.json
 ├── vite.config.js                   # Vite build configuration
 ├── eslint.config.js                 # ESLint configuration
 └── index.html                       # HTML shell (loads model-viewer CDN script)
@@ -175,17 +179,19 @@ graph TB
         ThreeJS["Three.js / model-viewer"]
     end
 
-    subgraph Backend["⚙️ FastAPI Backend — Python :8000"]
+    subgraph Backend["⚙️ FastAPI Backend — HuggingFace Spaces (Docker)"]
         GenEP["POST /generate"]
         Gen3DEP["POST /generate-3d"]
+        Gen3DRoom["POST /generate-3d-room"]
         BGTask["Background Tasks\n(4-layer AI waterfall)"]
         ControlNet["ControlNet Pipeline\n(MLSD + Depth)"]
+        DepthPipeline["Depth Room Pipeline\n(Depth → Mesh → GLB)"]
     end
 
     subgraph Supabase["🗄️ Supabase"]
         SupaAuth["Auth (Email + Google OAuth)"]
         SupaDB["PostgreSQL (profiles, designs)"]
-        SupaStorage["Storage (uploads, designs)"]
+        SupaStorage["Storage (uploads, designs, models)"]
     end
 
     subgraph AI["🤖 AI Service Providers"]
@@ -205,7 +211,7 @@ graph TB
     BGTask --> ControlNet
     Gen3DEP --> Rep
     Gen3DEP --> HF
-    Gen3DEP --> Meshy
+    Gen3DRoom --> DepthPipeline
 
     style Client fill:#1a1a2e,stroke:#e94560,color:#fff
     style Backend fill:#0f3460,stroke:#e94560,color:#fff
@@ -213,9 +219,6 @@ graph TB
     style AI fill:#1a1a2e,stroke:#f5a623,color:#fff
 ```
 
-> For a deep-dive into every component, see [ARCHITECTURE.md](./ARCHITECTURE.md).
-
----
 
 ## AI Generation Pipeline
 
@@ -339,8 +342,8 @@ flowchart TD
 | Bucket | Path Pattern | Contents |
 |---|---|---|
 | `uploads` | `{user_id}/{timestamp}.{ext}` | Raw user room photos |
-| `designs` | `{user_id}/{timestamp}_{label}.jpg` | AI-generated images |
-| `designs` | `3d_models/{timestamp}_{name}.glb` | Generated 3D models |
+| `designs` | `{user_id}/{timestamp}_{label}.jpg` | AI-generated 2D images |
+| `models` | `{user_id}/3d_models/{timestamp}_{name}.glb` | Generated 3D GLB models |
 
 ---
 
@@ -408,22 +411,24 @@ Provides mock/demo AI responses for local development without a running backend.
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_API_URL=http://localhost:8000   # optional, defaults to localhost:8000
+VITE_API_URL=http://localhost:8000   # local dev; set to HF Spaces URL in production
 ```
 
 ### Backend (`backend/.env`)
 ```env
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-service-role-key
+SUPABASE_KEY=your-anon-key
+SUPABASE_SERVICE_KEY=your-service-role-key  # bypasses RLS for server uploads
 
 HF_TOKEN=hf_...               # HuggingFace token (enables Layer 1 + Layer 4)
 REPLICATE_API_TOKEN=r8_...    # Replicate API token (Layer 2 + 3D Provider 1)
 MESHY_API_KEY=...             # Meshy.ai key (optional, 3D Provider 3)
 TRIPO_API_KEY=...             # Tripo3D key (optional, 3D Provider 4)
+FRONTEND_URL=https://your-app.vercel.app  # added to CORS allow_origins
 USE_FREE_MODE=false           # Set true to skip paid providers
 ```
 
-> **Note:** The backend uses the **service role key** (not anon key) to write to the database and storage on behalf of users.
+> **Note:** The backend uses the **service role key** (`SUPABASE_SERVICE_KEY`) to write to storage on behalf of users, bypassing RLS. If not set, falls back to user JWT.
 
 ---
 
@@ -431,8 +436,8 @@ USE_FREE_MODE=false           # Set true to skip paid providers
 
 ### Prerequisites
 - Node.js 18+
-- Python 3.10+ with pip
-- A Supabase project with `uploads` and `designs` storage buckets (public)
+- Python 3.11+ with pip
+- A Supabase project with `uploads`, `designs`, and `models` storage buckets (public)
 
 ### 1. Clone the repository
 ```bash
@@ -489,6 +494,39 @@ npm run start-backend
 
 ---
 
+## Deployment
+
+### Frontend → Vercel
+
+1. Connect your GitHub repo to Vercel
+2. Set environment variables in Vercel dashboard:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_API_URL` → Your HuggingFace Spaces backend URL
+3. Deploy — Vercel auto-builds the Vite SPA
+
+### Backend → HuggingFace Spaces (Docker)
+
+The backend includes a `Dockerfile` optimized for HuggingFace Spaces:
+
+1. Create a new HuggingFace Space (SDK: Docker)
+2. Push the `backend/` directory contents to the Space repo
+3. Set Secrets in Space settings:
+   - `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`
+   - `HF_TOKEN`, `REPLICATE_API_TOKEN`
+   - `FRONTEND_URL` → Your Vercel frontend URL (for CORS)
+4. The Space auto-builds and serves on port `7860`
+5. Update frontend `VITE_API_URL` to the Space URL
+
+**Dockerfile highlights:**
+- Base: `python:3.11-slim`
+- CPU-only PyTorch (smaller image, saves RAM)
+- Non-root user (HF security requirement)
+- System deps for OpenCV (`controlnet_aux`)
+- Static GLB serving via `/static/models/`
+
+---
+
 ## Development Scripts
 
 | Script | Command | Description |
@@ -514,6 +552,17 @@ The app uses a warm, earthy premium design language:
 | Container | `#efeeeb` | Section backgrounds |
 | Font (Display) | Noto Serif | Headings, titles |
 | Font (Body) | Inter | Labels, body text |
+
+---
+
+## API Endpoints
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| `GET` | `/health` | Health check | None |
+| `POST` | `/generate` | Trigger async 2D AI design generation (4-layer waterfall) | Bearer JWT |
+| `POST` | `/generate-3d` | Single-object 3D reconstruction (TRELLIS/InstantMesh/Meshy/Tripo) | Bearer JWT |
+| `POST` | `/generate-3d-room` | **Full-room** 3D reconstruction via depth estimation → mesh | Bearer JWT |
 
 ---
 
