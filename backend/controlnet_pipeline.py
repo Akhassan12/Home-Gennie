@@ -22,6 +22,40 @@ import tempfile
 import requests
 from PIL import Image
 
+# ─────────────────────────────────────────────────────────────────
+# STYLE DESCRIPTIONS — rich visual keywords per style.
+# These fix CLIP confusion between visually similar styles
+# (e.g. Modern ↔ Minimalist ↔ Contemporary).
+# ─────────────────────────────────────────────────────────────────
+STYLE_DESCRIPTIONS = {
+    "Modern":           "warm wood tones, mixed natural materials, clean horizontal lines, "
+                        "cozy textured fabrics, statement lighting, indoor plants, open shelving",
+    "Minimalist":       "stark white walls, monochrome palette, zero visual clutter, "
+                        "empty surfaces, single accent color, hidden storage, sparse furniture",
+    "Scandinavian":     "light birch wood, hygge wool textiles, pastel blue and sage accents, "
+                        "abundant natural light, white walls, simple functional furniture",
+    "Industrial":       "exposed brick walls, visible steel beams, concrete floors, "
+                        "Edison bulb pendants, dark metal fixtures, reclaimed wood shelves",
+    "Bohemian":         "layered multicolor textiles, macrame wall art, eclectic mixed patterns, "
+                        "hanging plants, rattan furniture, warm amber lighting, global artifacts",
+    "Japandi":          "wabi-sabi imperfection, muted earth tones, low-profile wooden furniture, "
+                        "zen negative space, bamboo accents, shoji screen dividers, bonsai",
+    "Mid-Century Modern": "tapered walnut legs, mustard and burnt orange palette, "
+                        "organic shapes, starburst clock, sunburst mirror, teak credenza",
+    "Farmhouse":        "shiplap white wood paneling, galvanized metal accents, mason jars, "
+                        "distressed wood beams, gingham and plaid textiles, barn doors",
+    "Art Deco":         "gold geometric patterns, jewel tone velvet, mirrored surfaces, "
+                        "chevron parquet floor, bold symmetry, lacquered black furniture",
+    "Coastal":          "whitewashed wood, navy and seafoam blue palette, rope textures, "
+                        "driftwood accents, linen curtains, shell decor, natural wicker",
+    "Traditional":      "crown molding, symmetrical layout, rich dark mahogany wood, "
+                        "ornate carved details, Persian rug, tufted upholstery, brass fixtures",
+    "Contemporary":     "neutral greige palette, curved organic furniture, mixed metal finishes, "
+                        "large abstract art, textured stone wall, sculptural decor pieces",
+    "Classic":          "crown molding, symmetrical layout, rich dark mahogany wood, "
+                        "ornate carved details, Persian rug, tufted upholstery, brass fixtures",
+}
+
 
 def _download_image(image_url: str) -> Image.Image:
     """Download an image from a URL and return as PIL Image."""
@@ -387,13 +421,14 @@ def run_controlnet_pipeline(
     # ── Step 3: Extract Depth Map (HF API or local CPU fallback) ────
     depth_image = extract_depth_map(original_image, hf_token)
     
-    # ── Step 4: Build the geometry-preserving prompt ─────────────────
+    # ── Step 4: Build the style-enriched geometry-preserving prompt ──
+    style_desc = STYLE_DESCRIPTIONS.get(style, f"elegant {style} design aesthetic")
     prompt = (
         f"A photorealistic {style} style interior design of a {room_type}. "
-        f"Premium interior photography. Magazine quality. "
-        f"Beautiful {style} furniture, perfect lighting, luxury materials. "
-        f"Same exact room structure, walls, windows, doors. "
-        f"8k resolution, highly detailed, professional real estate photography."
+        f"Key visual features: {style_desc}. "
+        f"Premium interior photography, magazine quality, 8k resolution. "
+        f"Highly detailed, professional real estate photography. "
+        f"Same exact room structure, walls, windows, doors, ceiling height, floor plan."
     )
     
     # ── Step 5: Generate with ControlNet ────────────────────────────
