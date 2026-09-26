@@ -14,6 +14,39 @@ from gradio_client import Client as GradioClient, handle_file
 
 load_dotenv()
 
+# ─────────────────────────────────────────────────────────────────
+# STYLE DESCRIPTIONS — rich visual keywords per style (shared with controlnet_pipeline).
+# Used to build enriched prompts for all generation layers.
+# ─────────────────────────────────────────────────────────────────
+STYLE_DESCRIPTIONS = {
+    "Modern":           "warm wood tones, mixed natural materials, clean horizontal lines, "
+                        "cozy textured fabrics, statement lighting, indoor plants, open shelving",
+    "Minimalist":       "stark white walls, monochrome palette, zero visual clutter, "
+                        "empty surfaces, single accent color, hidden storage, sparse furniture",
+    "Scandinavian":     "light birch wood, hygge wool textiles, pastel blue and sage accents, "
+                        "abundant natural light, white walls, simple functional furniture",
+    "Industrial":       "exposed brick walls, visible steel beams, concrete floors, "
+                        "Edison bulb pendants, dark metal fixtures, reclaimed wood shelves",
+    "Bohemian":         "layered multicolor textiles, macrame wall art, eclectic mixed patterns, "
+                        "hanging plants, rattan furniture, warm amber lighting, global artifacts",
+    "Japandi":          "wabi-sabi imperfection, muted earth tones, low-profile wooden furniture, "
+                        "zen negative space, bamboo accents, shoji screen dividers, bonsai",
+    "Mid-Century Modern": "tapered walnut legs, mustard and burnt orange palette, "
+                        "organic shapes, starburst clock, sunburst mirror, teak credenza",
+    "Farmhouse":        "shiplap white wood paneling, galvanized metal accents, mason jars, "
+                        "distressed wood beams, gingham and plaid textiles, barn doors",
+    "Art Deco":         "gold geometric patterns, jewel tone velvet, mirrored surfaces, "
+                        "chevron parquet floor, bold symmetry, lacquered black furniture",
+    "Coastal":          "whitewashed wood, navy and seafoam blue palette, rope textures, "
+                        "driftwood accents, linen curtains, shell decor, natural wicker",
+    "Traditional":      "crown molding, symmetrical layout, rich dark mahogany wood, "
+                        "ornate carved details, Persian rug, tufted upholstery, brass fixtures",
+    "Contemporary":     "neutral greige palette, curved organic furniture, mixed metal finishes, "
+                        "large abstract art, textured stone wall, sculptural decor pieces",
+    "Classic":          "crown molding, symmetrical layout, rich dark mahogany wood, "
+                        "ornate carved details, Persian rug, tufted upholstery, brass fixtures",
+}
+
 app = FastAPI(title="Home Gennie API")
 
 # ── Local static file server for GLB fallback ─────────────────────
@@ -59,6 +92,39 @@ class GenerateRequest(BaseModel):
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+@app.on_event("startup")
+def warmup_depth_api():
+    """
+    Pre-heat the HF Inference API depth model on Space startup.
+    Prevents the first real user request from paying the cold-start penalty.
+    Runs in background so it doesn’t block the server from accepting requests.
+    """
+    import threading
+    def _warmup():
+        hf_token = os.environ.get("HF_TOKEN")
+        if not hf_token:
+            return
+        try:
+            import io
+            from PIL import Image
+            # Create a tiny 64x64 white image as dummy input
+            dummy = Image.new("RGB", (64, 64), color=(200, 200, 200))
+            buf = io.BytesIO()
+            dummy.save(buf, format="PNG")
+            print("STARTUP: Warming up HF Depth API...")
+            r = requests.post(
+                "https://router.huggingface.co/hf-inference/models/"
+                "depth-anything/Depth-Anything-V2-Large-hf",
+                headers={"Authorization": f"Bearer {hf_token}", "Content-Type": "image/png"},
+                data=buf.getvalue(),
+                timeout=30,
+            )
+            print(f"STARTUP: HF Depth API warmup -> HTTP {r.status_code}")
+        except Exception as e:
+            print(f"STARTUP: Warmup failed (non-critical): {e}")
+    threading.Thread(target=_warmup, daemon=True).start()
+
 
 def _update_supabase_record(design_id: str, generated_url: str, auth_header: str):
     """Helper to update database once background task finishes."""
@@ -284,8 +350,10 @@ async def generate_design(req: GenerateRequest, request: Request, background_tas
     print(f"User ID: {req.userId}, Room: {req.roomType}, Style: {req.style}")
     
     auth_header = request.headers.get("Authorization")
+    style_desc = STYLE_DESCRIPTIONS.get(req.style, f"elegant {req.style} design aesthetic")
     prompt = (
         f"Redesign this exact room as a {req.style} style {req.roomType}. "
+        f"Key visual features: {style_desc}. "
         f"IMPORTANT: Keep the exact same room layout, wall positions, windows, doors, "
         f"ceiling height, and floor geometry. Only change the furniture, decor, colors, "
         f"materials and lighting. Same perspective and camera angle. "

@@ -51,6 +51,13 @@ model_capabilities.yaml
 KNOWLEDGE.txt
 PROJECT_RULES.md
 ARCHITECTURE.md
+evaluate_home_gennie.py
+latency_runs.csv
+quality_images
+results
+build_manifest.py
+manifest.csv
+
 .DS_Store
 
 # Local GLB model files generated at runtime (can be large, should not be in git)

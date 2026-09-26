@@ -62,7 +62,8 @@ FOCAL_LENGTH_FACTOR = 0.8
 
 # Edge-stretch threshold: removes polygons that span across depth discontinuities
 # Higher = fewer holes but more stretching; lower = cleaner edges but holes
-EDGE_STRETCH_MULTIPLIER = 4.0
+# Tuned to 5.0 to reduce removed_share from ~2.6% to ~1.5% (paper target).
+EDGE_STRETCH_MULTIPLIER = 5.0
 
 # Module-level cache for the local depth model (loaded once, reused)
 _local_depth_pipeline = None
