@@ -34,7 +34,12 @@
     "globals": "^15.9.0",
     "tailwindcss": "^4.2.4",
     "vite": "^8.0.10",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "js-yaml": ">=4.3.2",
+    "@humanfs/node": ">=0.16.8"
   }
 }
+

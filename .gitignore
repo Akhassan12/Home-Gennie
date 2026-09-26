@@ -57,7 +57,9 @@ quality_images
 results
 build_manifest.py
 manifest.csv
-
+designs_export.csv
+download_glbs.Py
+glbs
 .DS_Store
 
 # Local GLB model files generated at runtime (can be large, should not be in git)
