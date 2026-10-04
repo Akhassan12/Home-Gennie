@@ -22,6 +22,7 @@
 - [Environment Variables](#environment-variables)
 - [Getting Started](#getting-started)
 - [Development Scripts](#development-scripts)
+- [License](#license)
 
 ---
 
@@ -566,3 +567,8 @@ The app uses a warm, earthy premium design language:
 
 ---
 
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2026 Ali Hassan Kadri

@@ -60,6 +60,12 @@ manifest.csv
 designs_export.csv
 download_glbs.Py
 glbs
+glbs_improved
+latency_runs_paper.csv
+latency_test.csv
+figure6_qaulitative_grid.png
+figure6_qaulitative_grid.pdf
+generate_figure6.py
 .DS_Store
 
 # Local GLB model files generated at runtime (can be large, should not be in git)
